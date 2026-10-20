@@ -18,13 +18,17 @@
     });
   }
 
-  window.addEventListener('message', ev => {
+  function onMessage(ev) {
     if (ev.source !== window || !ev.data || !isApp()) return;
     try { handle(ev.data); } catch (e) {
       // After the helper is updated or reloaded, this copy can no longer reach it until the page is reloaded.
       window.postMessage({ psm: 'ext-error', message: String(e && e.message || e) }, '*');
     }
-  });
+  }
+  // Apps Script writes the app into this frame with document.write, which removes listeners added before it.
+  // Adding the same listener again does nothing while it is still attached, so keep re-adding it.
+  window.addEventListener('message', onMessage);
+  setInterval(() => window.addEventListener('message', onMessage), 500);
   function handle(d) {
     if (d.psm === 'app-hello') { announce(); sendDone(); sendLookups(); }
     // A patient search: goes ahead of waiting vaccinations, but never interrupts one already being filled.
