@@ -313,7 +313,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
       <section class="panel box" id="box1">
         <div class="hrow"><h2><span class="num">1</span>Find patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
         <div id="findFields">
-          <p class="lede">Type what you have: the NHS number, or first name, last name and date of birth. Add the postcode if you have it.</p>
+          <p class="lede">Enter the NHS number on its own, or the first name, last name and date of birth. The postcode is optional.</p>
           <div class="fields" style="margin-top:16px">
             <div class="f half"><label for="fNhs">NHS number</label><input id="fNhs" class="mono" inputmode="numeric" placeholder="000 000 0000"><span class="hint" id="nhsHint"></span></div>
             <div class="f half"><label for="fDob">Date of birth</label><input id="fDob" class="mono" inputmode="numeric" placeholder="dd/mm/yyyy"><span class="hint" id="dobHint"></span></div>
@@ -803,8 +803,12 @@ const canSearch = () => EXT.ready || !hasGas;
 function findErrors(f) {
   const errs = [];
   if (f.nhs && !nhsValid(f.nhs)) errs.push('The NHS number is not valid. Check the digits.');
-  if (!f.nhs && !(f.given && f.surname && f.dob)) errs.push('Enter the NHS number, or first name, last name and date of birth.');
   if ($('#fDob').value && !f.dob) errs.push('Enter the date of birth as dd/mm/yyyy.');
+  else if (!f.nhs) {
+    const missing = [['first name', f.given], ['last name', f.surname], ['date of birth', f.dob]].filter(([, v]) => !v).map(([k]) => k);
+    if (missing.length === 3) errs.push('Enter the NHS number, or the first name, last name and date of birth.');
+    else if (missing.length) errs.push(`Add the ${missing.join(' and ')} to search, or enter the NHS number instead.`);
+  }
   return errs;
 }
 function startFind() {
