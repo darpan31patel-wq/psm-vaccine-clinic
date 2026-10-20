@@ -57,7 +57,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* top bar */
 header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
-.topin { display: flex; align-items: stretch; gap: 0 28px; flex-wrap: wrap; }
+.topin { display: flex; align-items: stretch; gap: 0 20px; flex-wrap: wrap; }
 .brand { display: flex; flex-direction: column; justify-content: center; padding-block: 10px; line-height: 1.2; }
 .brand { flex-direction: row; align-items: center; gap: 10px; }
 .brand .logo { width: 30px; height: 30px; border-radius: 9px; background: var(--brand-grad); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; letter-spacing: .02em; flex: none; }
@@ -65,14 +65,14 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; b
 .brand b { font-size: 17px; }
 .brand small { color: var(--muted); font-size: 13px; }
 nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; align-items: stretch; }
-nav.tabs button { border: 0; background: transparent; padding: 0 12px; cursor: pointer; color: var(--muted); font-weight: 700; display: inline-flex; gap: 7px; align-items: center; min-height: 56px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+nav.tabs button { border: 0; background: transparent; padding: 0 10px; cursor: pointer; color: var(--muted); font-weight: 700; display: inline-flex; gap: 7px; align-items: center; min-height: 56px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
 nav.tabs button:hover { color: var(--ink); }
 nav.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
 nav.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 6px; }
 .count { font-family: var(--font-mono); font-size: 12px; background: var(--line-2); border-radius: 99px; padding: 1px 7px; color: var(--muted); font-weight: 500; }
 .count:empty, .count[data-n="0"] { display: none; }
 .count.hot { background: var(--warn-soft); color: var(--warn); }
-.topright { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; padding-block: 8px; }
+.topright { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding-block: 8px; }
 .topright select { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; max-width: 160px; }
 .sync { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
@@ -196,6 +196,7 @@ details.extra .fields { margin-top: 14px; }
 .chip.priv[aria-pressed="true"] { background: var(--priv); border-color: var(--priv); color: #fff; }
 .chip.flu { border-color: color-mix(in srgb, var(--flu) 35%, var(--line)); }
 .chip.covid { border-color: color-mix(in srgb, var(--covid) 35%, var(--line)); }
+.chip .pr { font-weight: 400; opacity: .8; margin-left: 4px; }
 .chip.priv { border-color: color-mix(in srgb, var(--priv) 35%, var(--line)); }
 .dayhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 14px 2px 0; }
 .dayhead:first-child { margin-top: 0; }
@@ -326,6 +327,7 @@ details.extra .fields { margin-top: 14px; }
 /* stats */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+.tile.priv { border-left-color: var(--priv); }
 .tile.warn { border-left-color: var(--warn); } .tile.bad { border-left-color: var(--bad); } .tile.ok { border-left-color: var(--ok); }
 .tile .k { font-size: 14px; color: var(--muted); }
 .tile .n { font-size: 32px; font-weight: 700; font-family: var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 4px; }
@@ -359,6 +361,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
       <button type="button" role="tab" data-tab="desk" aria-selected="true">Clinic <span class="count" id="cDesk"></span></button>
       <button type="button" role="tab" data-tab="bookings" aria-selected="false">Bookings <span class="count" id="cBook"></span></button>
       <button type="button" role="tab" data-tab="todo" aria-selected="false">To record <span class="count" id="cTodo"></span></button>
+      <button type="button" role="tab" data-tab="private" aria-selected="false">Private <span class="count" id="cPriv"></span></button>
       <button type="button" role="tab" data-tab="records" aria-selected="false">Records</button>
       <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings</button>
     </nav>
@@ -403,6 +406,8 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
             <div class="glabel">Vaccines</div>
             <div class="vaxpick" id="vaxMain"></div>
             <div class="vaxpick" id="vaxMore" style="margin-top:8px"></div>
+            <div class="glabel" style="margin-top:14px">Private <span>not recorded on RAVS</span></div>
+            <div class="vaxpick" id="vaxPriv"></div>
             <div class="eligs" id="eligBox"></div>
           </div>
 
@@ -452,6 +457,13 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
   <div class="todo" id="todoList"></div>
 </section>
 
+<!-- PRIVATE -->
+<section class="tab" id="tab-private">
+  <div class="pagehead"><h2>Private vaccinations</h2><span class="sp"></span><span class="small muted">Not recorded on RAVS</span></div>
+  <div class="tiles" id="privTiles"></div>
+  <div id="privList"></div>
+</section>
+
 <!-- RECORDS -->
 <section class="tab" id="tab-records">
   <div class="pagehead"><h2>Records</h2><span class="sp"></span><button class="btn sm" id="exportBtn" type="button">Export CSV</button></div>
@@ -488,6 +500,11 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
       <div class="f"><label for="sStaff">Desk staff, one per line</label><textarea id="sStaff" rows="4"></textarea></div>
       <div class="f"><label for="sLocations">Locations, one per line</label><textarea id="sLocations" rows="4"></textarea></div>
     </div>
+    <h3>Private prices</h3>
+    <div class="editgrid">
+      <div class="f"><label for="sPrivFlu">Private flu (£)</label><input id="sPrivFlu" type="number" min="0" step="0.01"></div>
+      <div class="f"><label for="sPrivCov">Private COVID (£)</label><input id="sPrivCov" type="number" min="0" step="0.01"></div>
+    </div>
     <h3>Age rules for this season</h3>
     <div class="editgrid">
       <div class="f"><label for="sFluAge">Flu: age by date</label><input id="sFluAge" type="number" min="0"></div>
@@ -518,9 +535,13 @@ const VACCINES = {
   'MMR':            { short: 'MMR', ravs: 'MMR', target: 'RAVS' },
   'MenB':           { short: 'MenB', ravs: 'MenB', target: 'RAVS' },
   'Pneumococcal':   { short: 'PPV', ravs: '', target: 'PPV record' },
-  'Private flu':    { short: 'Priv flu', ravs: '', target: 'Private system' },
-  'Private COVID':  { short: 'Priv COVID', ravs: '', target: 'Private system' },
+  'Private flu':    { short: 'Private flu', ravs: '', target: 'Private', private: true, nhs: 'Flu' },
+  'Private COVID':  { short: 'Private COVID', ravs: '', target: 'Private', private: true, nhs: 'COVID-19' },
 };
+const PRIV_BY = 'Private, not for RAVS';
+const isPriv = r => !!VACCINES[typeof r === 'string' ? r : r.vaccine]?.private;
+const priceOf = (v, st = S) => +((st.prices || {})[v] ?? DEFAULT_SETTINGS.prices[v] ?? 0);
+const money = n => '£' + (Math.round(n * 100) / 100).toLocaleString('en-GB', { minimumFractionDigits: n % 1 ? 2 : 0 });
 const RAVS_REASONS = ['Based on age', 'Healthcare worker', 'Pregnant', 'In a clinical risk group', 'Resident in a care home', 'Carer', 'Social care worker', 'Household contact of someone immunosuppressed', 'Homeless'];
 const FLU_UNDER_REASONS = RAVS_REASONS.slice(1);
 const COVID_UNDER_REASONS = ['In a clinical risk group', 'Resident in a care home'];
@@ -596,6 +617,10 @@ function checkEligibility(vaccine, dobIso, S) {
     if (ageNow < 18) return { state: 'blocked', text: `Age ${ageNow}. Pharmacy COVID vaccination is 18 and over.` };
     return { state: 'reason', text: `Age ${ageNow}, under ${S.covAge}. Only immunosuppressed patients or care home residents qualify.`, reasons: COVID_UNDER_REASONS };
   }
+  if (VACCINES[vaccine]?.private) {
+    if (ageNow < 18) return { state: 'blocked', text: `Age ${ageNow}. Private vaccination is 18 and over.` };
+    return { state: 'age', text: `Private, ${money(priceOf(vaccine, S))} · age ${ageNow}` };
+  }
   if (vaccine === 'Nasal flu') {
     if (S.nasalFrom && S.nasalTo && (dobIso < S.nasalFrom || dobIso > S.nasalTo)) return { state: 'warn', text: `Born outside ${ukDate(S.nasalFrom)} to ${ukDate(S.nasalTo)}. Check they are eligible.` };
     return { state: 'age', text: 'Date of birth is in the 2 to 3 year old range' };
@@ -611,7 +636,7 @@ function defaultProduct(vaccine, dobIso, S) {
   }
   return (prods[0] || {}).product || '';
 }
-function batchFor(product, S) { const p = (S.products || []).find(p => p.product === product && p.active); return p ? p.batch : ''; }
+function batchFor(product, S, vaccine) { const ps = (S.products || []).filter(p => p.product === product && p.active); const p = ps.find(x => x.vaccine === vaccine) || ps[0]; return p ? p.batch : ''; }
 
 /* ===================== booking paste parser ===================== */
 // The day heading in a copied page ("Monday 19 October 2026"), so the date doesn't have to be picked by hand.
@@ -658,7 +683,10 @@ const DEFAULT_SETTINGS = {
     { vaccine: 'Flu', product: 'Cell-based Trivalent Influenza Vaccine (TIVc)', batch: '', expiry: '', active: true },
     { vaccine: 'COVID-19', product: 'COVID-19 vaccine (set product)', batch: '', expiry: '', active: true },
     { vaccine: 'Nasal flu', product: 'Fluenz (LAIV)', batch: '', expiry: '', active: true },
+    { vaccine: 'Private flu', product: 'Private flu vaccine', batch: '', expiry: '', active: true },
+    { vaccine: 'Private COVID', product: 'Private COVID vaccine', batch: '', expiry: '', active: true },
   ],
+  prices: { 'Private flu': 25, 'Private COVID': 98 },
   vaccinators: [], staff: [], vaccinator: '', site: 'Left upper arm', consent: 'Patient',
   locations: ['Pharmacy', 'Off-site: Kingston Council'],
   fluAge: 65, fluDate: '2027-03-31', covAge: 75, covDate: '2027-01-31', seasonStart: '2026-09-01',
@@ -672,7 +700,7 @@ function gas(fn, ...args) {
 
 /* Demo backend: same calls as Code.gs, kept in this browser only. */
 const Demo = (() => {
-  const KEY = 'psmClinicDemo.v2';
+  const KEY = 'psmClinicDemo.v3';
   let db = store.get(KEY, null);
   function save() { db.version++; store.set(KEY, db); }
   function nhsWithCheck(base9) { for (;;) { let sum = 0; for (let i = 0; i < 9; i++) sum += +base9[i] * (10 - i); let c = 11 - (sum % 11); if (c === 11) c = 0; if (c !== 10) return base9 + c; base9 = String(+base9 + 1); } }
@@ -683,6 +711,8 @@ const Demo = (() => {
     S.products[1].batch = 'DEMO-C202'; S.products[1].expiry = '2027-04-01';
     S.products[2].product = 'Comirnaty (demo)'; S.products[2].batch = 'DEMO-P303'; S.products[2].expiry = '2027-02-01';
     S.products[3].batch = 'DEMO-L404'; S.products[3].expiry = '2027-01-15';
+    S.products[4].batch = 'DEMO-PF55'; S.products[4].expiry = '2027-04-30';
+    S.products[5].batch = 'DEMO-PC66'; S.products[5].expiry = '2027-02-28';
     S.vaccinators = ['A. Vaccinator', 'B. Pharmacist']; S.vaccinator = 'A. Vaccinator'; S.staff = ['Front desk 1', 'Front desk 2'];
     const people = [
       ['Sample', 'Alice', '1948-02-14', 'KT6 1AA', ['Flu', 'COVID-19'], 'entered', y],
@@ -699,6 +729,9 @@ const Demo = (() => {
       ['Trialson', 'Liam', '1949-10-19', 'KT6 3MM', ['COVID-19'], 'entered', t],
       ['Exemplar', 'Mona', '1953-02-27', 'KT6 4NN', ['Flu'], 'entered', t],
       ['Fictional', 'Ned', '1945-12-12', 'KT5 5PP', ['Flu', 'COVID-19'], 'entered', t],
+      ['Privateer', 'Olive', '1990-06-14', 'KT6 6QQ', ['Private flu'], 'entered', t],
+      ['Paidfor', 'Paul', '1972-03-03', 'KT5 7RR', ['Private flu', 'Private COVID'], 'entered', t],
+      ['Selfpay', 'Rita', '1981-09-09', 'KT6 8SS', ['Private COVID'], 'entered', y],
     ];
     const rows = [];
     people.forEach((p, i) => {
@@ -709,9 +742,9 @@ const Demo = (() => {
         const tm = p[5] === 'booked' ? `1${i % 5}:${i % 2 ? '30' : '00'}` : `${pad(9 + Math.floor(i / 3))}:${pad((i * 17) % 60)}`;
         rows.push({ id: uid() + i + v.length, visitId, date: p[6], time: tm, source: p[5] === 'booked' ? 'Booked' : 'Walk-in',
           nhs, surname: p[0].toUpperCase(), given: p[1], dob: p[2], postcode: p[3], phone: '', vaccine: v, product: prod,
-          batch: ['given', 'entered'].includes(p[5]) ? batchFor(prod, S) : '', eligibility: e.state === 'age' ? 'Based on age' : 'In a clinical risk group', eligNote: e.state === 'age' ? '' : 'Asthma (demo)',
+          batch: ['given', 'entered'].includes(p[5]) ? batchFor(prod, S, v) : '', eligibility: VACCINES[v].private ? 'Private' : e.state === 'age' ? 'Based on age' : 'In a clinical risk group', eligNote: e.state === 'age' ? '' : 'Asthma (demo)',
           consent: 'Patient', site: 'Left upper arm', vaccinator: ['given', 'entered'].includes(p[5]) ? 'A. Vaccinator' : '', deskBy: 'Front desk 1', location: 'Pharmacy',
-          status: p[5], givenAt: ['given', 'entered'].includes(p[5]) ? `${p[6]} ${tm}` : '', enteredAt: p[5] === 'entered' ? (p[6] === t ? `${t} ${pad(10 + Math.floor(i / 3))}:${pad((i * 17 + 5) % 60)}` : p[6] + ' 17:40') : '', enteredBy: p[5] === 'entered' ? 'Front desk 2' : '', note: '', updatedAt: new Date().toISOString() });
+          status: p[5], givenAt: ['given', 'entered'].includes(p[5]) ? `${p[6]} ${tm}` : '', enteredAt: p[5] === 'entered' ? (p[6] === t ? `${t} ${pad(10 + Math.floor(i / 3))}:${pad((i * 17 + 5) % 60)}` : p[6] + ' 17:40') : '', enteredBy: p[5] === 'entered' ? (VACCINES[v].private ? PRIV_BY : 'Front desk 2') : '', note: '', updatedAt: new Date().toISOString() });
       });
     });
     // a few earlier days for the season table
@@ -795,6 +828,8 @@ async function refresh(force) {
     if (b.unchanged) return;
     const sj = JSON.stringify(b.settings || {}), settingsChanged = sj !== refresh._sj; refresh._sj = sj;
     VERSION = b.version; S = Object.assign({}, DEFAULT_SETTINGS, b.settings || {}); ROWS = b.rows || []; DAYS = b.days || [];
+    // Settings saved before private vaccines existed have no private stock rows yet.
+    DEFAULT_SETTINGS.products.filter(p => VACCINES[p.vaccine]?.private && !S.products.some(x => x.vaccine === p.vaccine)).forEach(p => S.products = S.products.concat([Object.assign({}, p)]));
     await loadMore();
     renderAll(settingsChanged);
   } catch (e) { setSync(false, e); }
@@ -810,6 +845,34 @@ async function loadMore() {
   try { MORE = (await API.exportRows(from, to)).filter(r => r.date !== t); } catch (e) { console.warn(e); MORE = []; }
 }
 function allRows() { const have = new Set(ROWS.map(r => r.id)); return ROWS.concat(MORE.filter(r => !have.has(r.id))); }
+// Private vaccinations for the whole season, fetched when the Private tab is opened or the data changes.
+let PRIV = null;
+async function loadPrivate() {
+  try { PRIV = (await API.exportRows(S.seasonStart || '2000-01-01', todayIso())).filter(r => isPriv(r) && r.status === 'entered'); }
+  catch (e) { console.warn(e); PRIV = PRIV || []; }
+  renderPrivate();
+}
+function renderPrivate() {
+  const t = todayIso();
+  const have = new Set((PRIV || []).map(r => r.id));
+  const rows = (PRIV || []).concat(ROWS.filter(r => isPriv(r) && r.status === 'entered' && !have.has(r.id)));
+  const today = rows.filter(r => r.date === t);
+  const n = (list, v) => list.filter(r => r.vaccine === v).length;
+  const take = list => list.reduce((a, r) => a + priceOf(r.vaccine), 0);
+  setCount('#cPriv', today.length);
+  const tile = (k, v, cls) => `<div class="tile priv ${cls || ''}"><div class="k">${k}</div><div class="n">${v}</div></div>`;
+  $('#privTiles').innerHTML = tile('Private flu today', n(today, 'Private flu')) + tile('Private COVID today', n(today, 'Private COVID')) + tile('Taken today', money(take(today))) +
+    tile('Private flu this season', n(rows, 'Private flu')) + tile('Private COVID this season', n(rows, 'Private COVID')) + tile('Taken this season', money(take(rows)));
+  if (PRIV === null) { $('#privList').innerHTML = '<div class="panel empty">Loading…</div>'; return; }
+  const dates = [...new Set(rows.map(r => r.date))].sort().reverse();
+  $('#privList').innerHTML = dates.length ? dates.map(d => {
+    const day = rows.filter(r => r.date === d).sort((a, b) => (b.givenAt || '').localeCompare(a.givenAt || ''));
+    return `<div class="dayhead"><h3>${d === t ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${n(day, 'Private flu')} flu · ${n(day, 'Private COVID')} COVID · ${money(take(day))}</span></div>
+      <div class="panel list" style="padding-block:6px">${day.map(r => `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div>
+        <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}${r.vaccinator ? `<span>${esc(r.vaccinator)}</span>` : ''}</div></div>
+        <div class="right">${vaxTag(r)}<span class="mono small">${esc(r.batch || 'no batch')}</span><span class="small muted">${money(priceOf(r.vaccine))}</span></div></div>`).join('')}</div>`;
+  }).join('') : '<div class="panel empty">No private vaccinations yet this season.</div>';
+}
 function setSync(ok, e) { $('#syncDot').classList.toggle('off', !ok); $('#syncText').textContent = ok ? 'Live' : 'Offline, retrying'; if (!ok) console.warn(e); }
 
 function visits(rows) {
@@ -824,11 +887,13 @@ function renderAll(settingsChanged) {
   $('#todayLabel').textContent = longDate(todayIso());
   if (settingsChanged) { renderMe(); renderDeskForm(); renderSettings(); }
   renderDeskLists(); renderVax(); renderTodo(); renderRecords();
+  if ($('#tab-private').classList.contains('on')) loadPrivate(); else renderPrivate();
 }
 function renderMe() {
   const people = [...new Set([...(S.staff || []), ...(S.vaccinators || [])])];
   $('#meSel').innerHTML = '<option value="">Who are you?</option>' + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('');
 }
+// Private vaccinations never go to RAVS: saved as done straight away and kept off To record.
 const vaxKind = v => /^Private/.test(v) ? 'priv' : /COVID/.test(v) ? 'covid' : /flu/i.test(v) ? 'flu' : '';
 const vaxTag = (d, withProduct) => `<span class="vtag ${vaxKind(d.vaccine)}">${esc(VACCINES[d.vaccine]?.short || d.vaccine)}${withProduct && d.product ? ` <span class="pr">${esc(shortProduct(d.product))}</span>` : ''}</span>`;
 function statusPill(st, extra = '') { return `<span class="pill p-${st}">${STATUS_LABEL[st] || st}${extra}</span>`; }
@@ -838,7 +903,8 @@ function vaxPills(vs) { return vs.map(r => `<span class="pill p-${r.status}" tit
 let showMoreVax = false;
 function setCount(id, n) { const c = $(id); c.textContent = n || ''; c.dataset.n = n || 0; return c; }
 function renderDeskForm() {
-  const main = Object.keys(VACCINES).filter(v => VACCINES[v].main), more = Object.keys(VACCINES).filter(v => !VACCINES[v].main);
+  const main = Object.keys(VACCINES).filter(v => VACCINES[v].main), priv = Object.keys(VACCINES).filter(v => VACCINES[v].private), more = Object.keys(VACCINES).filter(v => !VACCINES[v].main && !VACCINES[v].private);
+  $('#vaxPriv').innerHTML = priv.map(v => `<button type="button" class="chip priv" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)} <span class="pr">${money(priceOf(v))}</span></button>`).join('');
   const openMore = showMoreVax || more.some(v => form.vaccines.includes(v));
   $('#vaxMain').innerHTML = main.map(v => `<button type="button" class="chip ${vaxKind(v)}" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)}</button>`).join('') +
     (openMore ? '' : `<button type="button" class="chip more" data-morevax>More vaccines</button>`);
@@ -1087,8 +1153,8 @@ async function submitDesk(ev) {
     const e = checkEligibility(v, f.dob, S), el = form.elig[v] || {};
     return { id: uid(), visitId, date: t, time, source: form.source, nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone,
       address: f.address, gp: f.gp,
-      vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S) : '', eligibility: e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''), eligNote: el.note || '',
-      consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? 'given' : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: '', enteredBy: '', note: f.note, updatedAt: now };
+      vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S, v) : '', eligibility: VACCINES[v].private ? 'Private' : e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''), eligNote: el.note || '',
+      consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? (isPriv(v) ? 'entered' : 'given') : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: given && isPriv(v) ? `${t} ${time}` : '', enteredBy: given && isPriv(v) ? PRIV_BY : '', note: f.note, updatedAt: now };
   });
   $('#regBtn').disabled = $('#waitBtn').disabled = true;
   try {
@@ -1196,7 +1262,7 @@ function givenRow(v) {
   const r = v[0];
   return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub vx">${v.map(d => vaxTag(d, true)).join('')}</div>
     <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div></div>
-    <div class="right"><span class="pills">${[...new Set(v.map(d => d.status))].map(st => st === 'given' ? '' : statusPill(st)).join('')}</span><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button>${v.some(d => d.status === 'given') ? `<button type="button" class="btn sm ghost" data-undo="${esc(r.visitId)}" title="Back to waiting">Undo</button>` : ''}</div></div>`;
+    <div class="right"><span class="pills">${[...new Set(v.filter(d => !isPriv(d)).map(d => d.status))].map(st => st === 'given' ? '' : statusPill(st)).join('')}</span><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button>${v.some(d => d.status === 'given' || (isPriv(d) && d.status === 'entered')) ? `<button type="button" class="btn sm ghost" data-undo="${esc(r.visitId)}" title="Back to waiting">Undo</button>` : ''}</div></div>`;
 }
 function doseEditor(d) {
   const prods = (S.products || []).filter(p => p.vaccine === d.vaccine);
@@ -1215,7 +1281,7 @@ function doseEditor(d) {
 }
 async function giveVisit(visitId) {
   const now = new Date(); const stamp = `${todayIso()} ${nowTime()}`;
-  const changes = ROWS.filter(r => r.visitId === visitId && r.status === 'waiting').map(r => ({ id: r.id, patch: { status: 'given', givenAt: stamp, batch: r.batch || batchFor(r.product, S), vaccinator: r.vaccinator || S.vaccinator, site: r.site || S.site, consent: r.consent || S.consent } }));
+  const changes = ROWS.filter(r => r.visitId === visitId && r.status === 'waiting').map(r => ({ id: r.id, patch: { status: isPriv(r) ? 'entered' : 'given', givenAt: stamp, ...(isPriv(r) ? { enteredAt: stamp, enteredBy: PRIV_BY } : {}), batch: r.batch || batchFor(r.product, S, r.vaccine), vaccinator: r.vaccinator || S.vaccinator, site: r.site || S.site, consent: r.consent || S.consent } }));
   if (!S.vaccinator) toast('Set the vaccinator on duty in Settings');
   await API.updateEach(changes); toast('Marked as vaccinated'); await refresh(true);
 }
@@ -1235,7 +1301,7 @@ function renderTodo() {
   const dates = [...new Set(list.map(r => r.date).concat(todayIso()))].sort();
   $('#todoList').innerHTML = dates.map(d => {
     const todo = visits(list.filter(r => r.date === d));
-    const done = visits(allRows().filter(r => r.status === 'entered' && r.date === d)).sort((a, b) => (b[0].enteredAt || '').localeCompare(a[0].enteredAt || ''));
+    const done = visits(allRows().filter(r => r.status === 'entered' && r.date === d && !isPriv(r))).sort((a, b) => (b[0].enteredAt || '').localeCompare(a[0].enteredAt || ''));
     const age = daysBetween(d, todayIso());
     return `<div class="dayhead"><h3>${d === todayIso() ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${todo.length} to record · ${done.length} recorded</span>${age > 0 && todo.length ? `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} ago · ${15 - age > 0 ? 15 - age + ' left to claim' : 'claim window passed'}</span>` : ''}</div>` +
       (todo.length ? todo.map(todoCard).join('') : '<div class="panel empty">Everything given on this day has been recorded.</div>') +
@@ -1324,6 +1390,7 @@ function renderSettings() {
   $('#sVaxHint').textContent = fromRavs ? `Names as RAVS shows them (read ${S.ravsVaccinatorsAt ? ukDate(S.ravsVaccinatorsAt.slice(0, 10)) : ''}). Tap to choose who vaccinates here.`
     : "One per line, exactly as RAVS shows them under \"Who is the vaccinator?\". After the RAVS Helper has been on that page once, this becomes a list from RAVS and can't be mistyped.";
   $('#sVaccinators').value = (S.vaccinators || []).join('\n'); $('#sStaff').value = (S.staff || []).join('\n'); $('#sLocations').value = (S.locations || []).join('\n');
+  $('#sPrivFlu').value = priceOf('Private flu'); $('#sPrivCov').value = priceOf('Private COVID');
   $('#sFluAge').value = S.fluAge; $('#sFluDate').value = S.fluDate; $('#sCovAge').value = S.covAge; $('#sCovDate').value = S.covDate; $('#sSeason').value = S.seasonStart; $('#sNasalFrom').value = S.nasalFrom; $('#sNasalTo').value = S.nasalTo;
   renderProdTable();
 }
@@ -1342,6 +1409,7 @@ async function saveSettings(ev) {
   const lines = id => $(id).value.split('\n').map(s => s.trim()).filter(Boolean);
   const s = Object.assign({}, S, { products: readProducts(), vaccinators: (S.ravsVaccinators || []).length ? $$('#sVaxRavs [aria-pressed="true"]').map(b => b.dataset.ravsvax) : lines('#sVaccinators'), staff: lines('#sStaff'), locations: lines('#sLocations'),
     vaccinator: $('#sVaccinator').value, site: $('#sSite').value, consent: $('#sConsent').value,
+    prices: { 'Private flu': +$('#sPrivFlu').value || 0, 'Private COVID': +$('#sPrivCov').value || 0 },
     fluAge: +$('#sFluAge').value, fluDate: $('#sFluDate').value, covAge: +$('#sCovAge').value, covDate: $('#sCovDate').value, seasonStart: $('#sSeason').value, nasalFrom: $('#sNasalFrom').value, nasalTo: $('#sNasalTo').value });
   if (!s.vaccinators.includes(s.vaccinator)) s.vaccinator = s.vaccinators[0] || '';
   await API.saveSettings(s); toast('Settings saved'); await refresh(true);
@@ -1383,6 +1451,7 @@ function showTab(name) {
   $$('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
   $$('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + name));
   store.set('psm.tab', name);
+  if (name === 'private') loadPrivate();
 }
 document.addEventListener('click', async ev => {
   if (ev.target.closest('#ravsCheck')) return checkRavs();
@@ -1403,7 +1472,13 @@ document.addEventListener('click', async ev => {
   if (b.matches('[data-scrim]') && ev.target === b) return closeModal();
   if (d.tab) return showTab(d.tab);
   if (d.goto) return showTab(d.goto);
-  if (d.vax) { const v = d.vax; form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines, v]; return renderDeskForm(); }
+  if (d.vax) {
+    const v = d.vax;
+    // Private flu replaces NHS flu (and the other way round); the same for COVID.
+    const pair = VACCINES[v].nhs || Object.keys(VACCINES).find(k => VACCINES[k].nhs === v);
+    form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines.filter(x => x !== pair), v];
+    return renderDeskForm();
+  }
   if ('find' in d) return startFind();
   if ('showravs' in d) return window.postMessage({ psm: 'app-show-ravs' }, '*');
   if ('findcancel' in d) { cancelFind(); form.step = 'find'; return renderFind(); }
@@ -1425,7 +1500,7 @@ document.addEventListener('click', async ev => {
     const changes = $$(`[data-dose]`).map(el => { const patch = {}; $$('[data-k]', el).forEach(i => patch[i.dataset.k] = i.value); if (patch.status === 'given' && !patch.batch) patch.batch = batchFor(patch.product, S); return { id: el.dataset.dose, patch }; });
     await API.updateEach(changes); editing = null; toast('Changes saved'); return refresh(true);
   }
-  if (d.undo) { await API.update(ROWS.filter(r => r.visitId === d.undo && r.status === 'given').map(r => r.id), { status: 'waiting', givenAt: '' }); return refresh(true); }
+  if (d.undo) { await API.update(ROWS.filter(r => r.visitId === d.undo && (r.status === 'given' || (isPriv(r) && r.status === 'entered'))).map(r => r.id), { status: 'waiting', givenAt: '', enteredAt: '', enteredBy: '' }); return refresh(true); }
   if (d.copy !== undefined) return copyText(d.copy, b);
   if (d.entered) { await API.update([d.entered], { status: 'entered', enteredAt: `${todayIso()} ${nowTime()}`, enteredBy: me }); toast('Marked as recorded'); return refresh(true); }
   if (d.fill) return sendToRavs(ROWS.filter(r => r.id === d.fill));
@@ -1475,7 +1550,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '20 Oct 2026, 8';
+const BUILD = '20 Oct 2026, 9';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
