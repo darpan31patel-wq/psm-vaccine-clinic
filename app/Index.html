@@ -1,0 +1,1148 @@
+<title>PSM Vaccine Clinic</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: quiet top bar with underline tabs; each tab is one main working surface, with a narrower side list where needed. Lists use dividers inside one panel rather than a box per row. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --surface-2: #f7f9f8;
+  --ink: #14232a;
+  --muted: #5d6e72;
+  --faint: #8a999c;
+  --line: #e1e7e6;
+  --line-2: #eef2f1;
+  --accent: #0a6464;
+  --accent-soft: #e2f0ee;
+  --accent-ink: #ffffff;
+  --ok: #1d7340; --ok-soft: #e1f1e6;
+  --warn: #9a5800; --warn-soft: #fcf0dc;
+  --bad: #b02a21; --bad-soft: #fae3e0;
+  --info: #2a5a9e; --info-soft: #e5edf8;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(20, 35, 42, .04), 0 2px 8px rgba(20, 35, 42, .04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1719; --surface: #162124; --surface-2: #1b282b; --ink: #e4eeee; --muted: #9db0b2; --faint: #6f8386; --line: #26373a; --line-2: #1f2e31;
+    --accent: #4fb8b0; --accent-soft: #163634; --accent-ink: #062322;
+    --ok: #6fcf93; --ok-soft: #173826; --warn: #f0b058; --warn-soft: #3a2a10; --bad: #f08a80; --bad-soft: #401a17; --info: #8db4ef; --info-soft: #1a2a44;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1719; --surface: #162124; --surface-2: #1b282b; --ink: #e4eeee; --muted: #9db0b2; --faint: #6f8386; --line: #26373a; --line-2: #1f2e31;
+  --accent: #4fb8b0; --accent-soft: #163634; --accent-ink: #062322;
+  --ok: #6fcf93; --ok-soft: #173826; --warn: #f0b058; --warn-soft: #3a2a10; --bad: #f08a80; --bad-soft: #401a17; --info: #8db4ef; --info-soft: #1a2a44;
+  --shadow: none;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5; margin: 0; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1200px; margin: 0 auto; }
+
+/* top bar */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topin { display: flex; align-items: stretch; gap: 0 28px; flex-wrap: wrap; }
+.brand { display: flex; flex-direction: column; justify-content: center; padding-block: 10px; line-height: 1.2; }
+.brand b { font-size: 17px; }
+.brand small { color: var(--muted); font-size: 13px; }
+nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; align-items: stretch; }
+nav.tabs button { border: 0; background: transparent; padding: 0 12px; cursor: pointer; color: var(--muted); font-weight: 700; display: inline-flex; gap: 7px; align-items: center; min-height: 56px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+nav.tabs button:hover { color: var(--ink); }
+nav.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+nav.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 6px; }
+.count { font-family: var(--font-mono); font-size: 12px; background: var(--line-2); border-radius: 99px; padding: 1px 7px; color: var(--muted); font-weight: 500; }
+.count:empty, .count[data-n="0"] { display: none; }
+.count.hot { background: var(--warn-soft); color: var(--warn); }
+.topright { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; padding-block: 8px; }
+.topright select { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; max-width: 160px; }
+.sync { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+.dot.off { background: var(--bad); }
+.demo-banner { background: var(--info-soft); color: var(--info); font-size: 13px; }
+.demo-banner .wrap { padding-block: 5px; }
+@media (max-width: 720px) {
+  .topin { gap: 0 12px; }
+  nav.tabs { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  nav.tabs button { min-height: 44px; white-space: nowrap; }
+}
+
+main { padding-block: 28px 80px; }
+section.tab { display: none; }
+section.tab.on { display: block; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.grid2.desk { grid-template-columns: minmax(0, 460px) minmax(0, 1fr); }
+@media (max-width: 900px) { .grid2, .grid2.desk { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; min-width: 0; box-shadow: var(--shadow); }
+@media (max-width: 520px) { .panel { padding: 18px 16px; } }
+.panel h2, .pagehead h2 { font-size: 19px; margin: 0; text-wrap: balance; }
+.panel h3 { font-size: 13px; font-weight: 700; color: var(--muted); margin: 28px 0 6px; }
+.panel h3:first-of-type { margin-top: 20px; }
+.hrow { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.hrow h2 { margin: 0; }
+.hrow .sp { flex: 1; }
+.lede { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+.pagehead { display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.pagehead .sp { flex: 1; }
+
+/* form */
+.group { margin-top: 24px; }
+.group:first-of-type { margin-top: 20px; }
+.glabel { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 10px; display: flex; gap: 8px; align-items: baseline; }
+.glabel span { font-weight: 400; color: var(--faint); }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+.f { display: flex; flex-direction: column; gap: 5px; min-width: 0; grid-column: 1 / -1; }
+.f.half { grid-column: span 1; }
+.f label { font-size: 14px; color: var(--ink); }
+.f input, .f select, .f textarea { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; width: 100%; }
+.f input::placeholder { color: var(--faint); }
+.f input:focus, .f select:focus, .f textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.f .hint { font-size: 13px; color: var(--muted); min-height: 0; }
+.f .hint:empty { display: none; }
+.f .hint.bad { color: var(--bad); } .f .hint.ok { color: var(--ok); }
+.vaxpick { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); background: var(--surface); padding: 8px 16px; border-radius: 99px; cursor: pointer; font-weight: 700; }
+.chip:hover { border-color: var(--faint); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip.small { font-size: 14px; padding: 5px 12px; font-weight: 400; }
+.chip.more { border-style: dashed; color: var(--muted); font-weight: 400; }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eligs { display: grid; gap: 10px; margin-top: 14px; }
+.eligs:empty { display: none; }
+.elig { display: grid; gap: 8px; }
+.eline { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+.eline .ic { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; transform: translateY(3px); }
+.eline.ok { color: var(--ok); } .eline.ok .ic { background: var(--ok-soft); }
+.eline.warn { color: var(--warn); } .eline.warn .ic { background: var(--warn-soft); }
+.eline.bad { color: var(--bad); } .eline.bad .ic { background: var(--bad-soft); }
+.eline.muted .ic { background: var(--line-2); }
+.eline b { color: var(--ink); }
+.elig select, .elig input { padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); width: 100%; }
+.elig .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding-left: 26px; }
+@media (max-width: 520px) { .elig .pair { grid-template-columns: minmax(0, 1fr); padding-left: 0; } }
+details.extra { margin-top: 20px; }
+details.extra summary { cursor: pointer; color: var(--accent); font-size: 14px; font-weight: 700; list-style: none; display: inline-flex; gap: 6px; align-items: center; }
+details.extra summary::-webkit-details-marker { display: none; }
+details.extra summary::before { content: "+"; font-family: var(--font-mono); }
+details.extra[open] summary::before { content: "−"; }
+details.extra summary .muted { font-weight: 400; }
+details.extra .fields { margin-top: 14px; }
+.alert { border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+.alert + .alert { margin-top: 8px; }
+.alert.warn { background: var(--warn-soft); color: var(--warn); }
+.alert.bad { background: var(--bad-soft); color: var(--bad); }
+.alert.info { background: var(--info-soft); color: var(--info); }
+.alert.ok { background: var(--ok-soft); color: var(--ok); }
+#dupBox:empty { display: none; }
+#dupBox { margin-top: 18px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 9px 16px; border-radius: 10px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.btn:hover { border-color: var(--faint); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.go { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--ink); background: var(--line-2); }
+.btn.sm { padding: 6px 12px; font-size: 14px; }
+.btn.lg { padding: 13px 20px; font-size: 16px; }
+.btn.block { width: 100%; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* pills */
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.p-booked { background: var(--info-soft); color: var(--info); }
+.p-waiting { background: var(--warn-soft); color: var(--warn); }
+.p-given { background: var(--accent-soft); color: var(--accent); }
+.p-entered { background: var(--ok-soft); color: var(--ok); }
+.p-notgiven, .p-late { background: var(--bad-soft); color: var(--bad); }
+.p-neutral { background: var(--line-2); color: var(--muted); }
+.pills { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+/* lists: divided rows inside a panel */
+.list { display: grid; }
+.row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line-2); }
+.list > .row:first-child { border-top: 0; }
+.row .time { font-family: var(--font-mono); font-size: 14px; color: var(--muted); }
+.row .who { min-width: 0; }
+.row .nm { font-weight: 700; overflow-wrap: anywhere; }
+.row .sub { font-size: 13px; color: var(--muted); display: flex; gap: 4px 12px; flex-wrap: wrap; }
+.row .right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 520px) { .row { grid-template-columns: 44px minmax(0, 1fr); } .row .right { grid-column: 2; justify-content: flex-start; } }
+.empty { color: var(--muted); padding: 22px 8px; text-align: center; font-size: 14px; }
+.summary { display: flex; gap: 6px 20px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 6px; }
+.summary b { color: var(--ink); font-family: var(--font-mono); }
+
+/* vaccinator */
+.defaults { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px; font-size: 14px; color: var(--muted); margin: 0 0 24px; padding: 12px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.defaults b { color: var(--ink); font-weight: 700; }
+.defaults .warnx { color: var(--warn); font-weight: 700; }
+.grid2.vax { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .grid2.vax { grid-template-columns: minmax(0, 1fr); } }
+.stack { display: grid; gap: 14px; }
+.card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 20px 22px; display: grid; gap: 14px; box-shadow: var(--shadow); }
+.panel .card { box-shadow: none; padding: 16px 18px; }
+.card.next { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.card .head { display: grid; gap: 2px; }
+.card .head .nm { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.card .head .meta { font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.card .head .meta .mono { font-size: 13px; }
+.doses { display: grid; gap: 8px; }
+.dose { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 15px; }
+.dose .vx { font-weight: 700; min-width: 76px; }
+.dose .det { color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.dose .det b { color: var(--ink); font-weight: 400; }
+.card .actions { margin-top: 2px; }
+.sectitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; }
+.sectitle h2 { font-size: 17px; margin: 0; }
+.sectitle span { color: var(--muted); font-size: 14px; }
+.doseedit { border-top: 1px solid var(--line-2); padding-top: 12px; display: grid; gap: 10px; }
+.doseedit:first-child { border-top: 0; padding-top: 0; }
+.doseedit .vx { font-weight: 700; }
+.editgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.editgrid .f { grid-column: auto; }
+.editgrid .f label { font-size: 13px; color: var(--muted); }
+
+/* RAVS to-do */
+.todo { display: grid; gap: 12px; }
+.rv { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.rv .rvh { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: center; padding: 16px 20px; }
+.rv .who .nm { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+.rv .who .meta { font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 2px; align-items: center; }
+.rv .rvact { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+@media (max-width: 640px) { .rv .rvh { grid-template-columns: minmax(0, 1fr); } .rv .rvact { justify-content: flex-start; } .rv .toggle { justify-self: start; padding-left: 0; } }
+.toggle { border: 0; background: none; color: var(--accent); font-weight: 700; font-size: 14px; cursor: pointer; padding: 6px 4px; }
+.toggle:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.rvbody { border-top: 1px solid var(--line-2); padding: 18px 20px 20px; display: grid; gap: 18px; }
+.rvbody .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px 36px; }
+.rvbody h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.kv { display: grid; grid-template-columns: 130px minmax(0, 1fr); align-items: center; gap: 0 12px; min-height: 38px; border-bottom: 1px solid var(--line-2); }
+.kv .k { font-size: 14px; color: var(--muted); }
+.kv .v { min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+.copy { all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; margin-left: -8px; border-radius: 8px; font-weight: 700; overflow-wrap: anywhere; }
+.copy::after { content: "Copy"; font-family: var(--font-body); font-size: 12px; font-weight: 400; color: var(--faint); flex: none; }
+.copy:hover { background: var(--accent-soft); }
+.copy:hover::after { color: var(--accent); }
+.copy:focus-visible { outline: 2px solid var(--accent); }
+.copy.done { background: var(--ok-soft); }
+.copy.done::after { content: "Copied"; color: var(--ok); }
+.pick { font-size: 12px; color: var(--faint); font-weight: 400; margin-left: 8px; white-space: nowrap; }
+.rvbody .note { font-size: 14px; color: var(--muted); }
+.tip { font-size: 14px; color: var(--muted); margin: -10px 0 18px; max-width: 70ch; }
+
+/* stats */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+.tile .k { font-size: 14px; color: var(--muted); }
+.tile .n { font-size: 32px; font-weight: 700; font-family: var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 4px; }
+.tile.warn .n { color: var(--warn); } .tile.bad .n { color: var(--bad); } .tile.ok .n { color: var(--ok); }
+.tablewrap { overflow-x: auto; border-radius: 10px; }
+.panel .tablewrap { margin-inline: -8px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+th { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--surface); position: sticky; top: 0; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--accent); border-radius: 3px; min-width: 2px; opacity: .8; }
+#prodTable input:not([type=checkbox]), #prodTable select { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+
+/* modal + toast */
+.scrim { position: fixed; inset: 0; background: rgba(10, 20, 22, .45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; z-index: 20; overflow-y: auto; }
+.modal { background: var(--surface); border-radius: 16px; border: 1px solid var(--line); width: min(720px, 100%); padding: 24px; display: grid; gap: 14px; }
+.modal h2 { margin: 0; font-size: 19px; }
+.modal p { margin: 0; }
+.modal textarea { width: 100%; min-height: 180px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-family: var(--font-mono); font-size: 12px; }
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 10px; font-weight: 700; z-index: 30; max-width: calc(100% - 32px); }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+@media (prefers-reduced-motion: no-preference) { .card, .rv, .chip, .btn, .copy { transition: border-color .15s, background-color .15s; } }
+</style>
+
+<div id="demoBanner" class="demo-banner" hidden><div class="wrap">Demo with made-up patients. Changes stay in this browser only.</div></div>
+<header class="top">
+  <div class="wrap topin">
+    <div class="brand"><b>PSM Vaccine Clinic</b><small id="todayLabel"></small></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="desk" aria-selected="true">Clinic <span class="count" id="cDesk"></span></button>
+      <button role="tab" data-tab="todo" aria-selected="false">To record <span class="count" id="cTodo"></span></button>
+      <button role="tab" data-tab="records" aria-selected="false">Records</button>
+      <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
+    </nav>
+    <div class="topright">
+      <select id="meSel" aria-label="Who is using this computer"></select>
+      <span class="sync" title="Live sync"><span class="dot" id="syncDot"></span><span id="syncText">Live</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- FRONT DESK -->
+<section class="tab on" id="tab-desk">
+  <div class="defaults" id="defaultsBar"></div>
+  <div class="grid2 desk">
+    <form class="panel" id="deskForm" autocomplete="off">
+      <div class="hrow"><h2 id="formTitle">Register a patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
+
+      <div class="group">
+        <div class="glabel">Patient <span>NHS number, or name and postcode</span></div>
+        <div class="fields">
+          <div class="f half"><label for="fNhs">NHS number</label><input id="fNhs" class="mono" inputmode="numeric" placeholder="000 000 0000"><span class="hint" id="nhsHint"></span></div>
+          <div class="f half"><label for="fDob">Date of birth</label><input id="fDob" class="mono" inputmode="numeric" placeholder="dd/mm/yyyy"><span class="hint" id="dobHint"></span></div>
+          <div class="f half"><label for="fGiven">First name</label><input id="fGiven"></div>
+          <div class="f half"><label for="fSurname">Last name</label><input id="fSurname"></div>
+          <div class="f half"><label for="fPostcode">Postcode</label><input id="fPostcode" class="mono"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="glabel">Vaccines</div>
+        <div class="vaxpick" id="vaxMain"></div>
+        <div class="vaxpick" id="vaxMore" style="margin-top:8px"></div>
+        <div class="eligs" id="eligBox"></div>
+      </div>
+
+      <details class="extra" id="extraBox">
+        <summary>Phone, note or location <span class="muted" id="extraSum"></span></summary>
+        <div class="fields">
+          <div class="f half"><label for="fPhone">Phone</label><input id="fPhone" class="mono" inputmode="tel"></div>
+          <div class="f half"><label for="fLocation">Where</label><select id="fLocation"></select></div>
+          <div class="f"><label for="fNote">Note for the vaccinator</label><input id="fNote"></div>
+        </div>
+      </details>
+
+      <div id="dupBox"></div>
+      <div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given">Vaccinated</button><button class="btn ghost sm" type="submit" id="waitBtn" data-mode="waiting">Not vaccinated yet, add to waiting list</button></div>
+    </form>
+
+    <div class="panel">
+      <div class="hrow"><h2>Today</h2><span class="sp"></span><button class="btn sm" id="pasteBtn" type="button">Paste bookings</button></div>
+      <div class="summary" id="deskSummary"></div>
+      <h3>Booked, not yet here</h3>
+      <div class="list" id="bookedList"></div>
+      <div id="waitWrap"><h3>Waiting <span id="waitCount" style="font-weight:400"></span></h3>
+      <div class="stack" id="waitList"></div></div>
+      <h3>Vaccinated today <span id="givenCount" style="font-weight:400"></span></h3>
+      <div class="list" id="givenList"></div>
+    </div>
+  </div>
+</section>
+
+<!-- TO RECORD -->
+<section class="tab" id="tab-todo">
+  <div class="pagehead">
+    <h2>Still to record</h2>
+    <span class="sp"></span>
+    <div class="vaxpick" id="todoFilter"></div>
+    <button class="btn primary" id="fillAll" type="button" hidden>Fill all in RAVS</button>
+  </div>
+  <p class="tip" id="todoTip">Record on RAVS on the day. Anything more than 15 days late can't be claimed. Open a card to see the RAVS fields in page order, and click any value to copy it.</p>
+  <div class="alert ok small" id="extNote" hidden style="margin:-6px 0 18px"></div>
+  <div class="todo" id="todoList"></div>
+</section>
+
+<!-- RECORDS -->
+<section class="tab" id="tab-records">
+  <div class="pagehead"><h2>Records</h2><span class="sp"></span><button class="btn sm" id="exportBtn" type="button">Export CSV</button></div>
+  <div class="tiles" id="tiles"></div>
+  <div class="grid2" style="grid-template-columns: minmax(0,1.2fr) minmax(0,1fr)">
+    <div class="panel">
+      <div class="hrow"><h2>Season by day</h2></div>
+      <div class="tablewrap" style="max-height:540px;margin-top:10px"><table id="dayTable"></table></div>
+    </div>
+    <div class="panel">
+      <div class="hrow"><h2>Find a patient</h2></div>
+      <div class="f" style="margin-top:14px"><input id="searchBox" placeholder="Name, NHS number or date of birth" aria-label="Search"></div>
+      <div class="list" id="searchList" style="margin-top:6px"></div>
+    </div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section class="tab" id="tab-settings">
+  <form class="panel" id="setForm">
+    <div class="hrow"><h2>Clinic settings</h2><span class="sp"></span><span class="small muted">Shared by every computer</span></div>
+    <h3>Today's vaccine stock</h3>
+    <div class="tablewrap"><table id="prodTable"></table></div>
+    <div class="actions" style="margin-top:12px"><button type="button" class="btn sm" id="addProd">Add a product</button></div>
+    <h3>Defaults</h3>
+    <div class="editgrid">
+      <div class="f"><label for="sVaccinator">Vaccinator on duty</label><select id="sVaccinator"></select></div>
+      <div class="f"><label for="sSite">Injection site</label><select id="sSite"></select></div>
+      <div class="f"><label for="sConsent">Consent given by</label><select id="sConsent"></select></div>
+    </div>
+    <h3>People and places</h3>
+    <div class="editgrid">
+      <div class="f"><label for="sVaccinators">Vaccinators (as named in RAVS), one per line</label><textarea id="sVaccinators" rows="4"></textarea></div>
+      <div class="f"><label for="sStaff">Desk staff, one per line</label><textarea id="sStaff" rows="4"></textarea></div>
+      <div class="f"><label for="sLocations">Locations, one per line</label><textarea id="sLocations" rows="4"></textarea></div>
+    </div>
+    <h3>Age rules for this season</h3>
+    <div class="editgrid">
+      <div class="f"><label for="sFluAge">Flu: age by date</label><input id="sFluAge" type="number" min="0"></div>
+      <div class="f"><label for="sFluDate">Flu: date</label><input id="sFluDate" type="date"></div>
+      <div class="f"><label for="sCovAge">COVID: age by date</label><input id="sCovAge" type="number" min="0"></div>
+      <div class="f"><label for="sCovDate">COVID: date</label><input id="sCovDate" type="date"></div>
+      <div class="f"><label for="sSeason">Season started</label><input id="sSeason" type="date"></div>
+      <div class="f"><label for="sNasalFrom">Nasal flu: born from</label><input id="sNasalFrom" type="date"></div>
+      <div class="f"><label for="sNasalTo">Nasal flu: born up to</label><input id="sNasalTo" type="date"></div>
+    </div>
+    <p class="small muted" style="margin-top:14px">Check these against the current flu letter and COVID guidance. Anyone under the age line needs a reason recorded before they can be registered.</p>
+    <div class="actions"><button class="btn primary" type="submit">Save settings</button></div>
+  </form>
+</section>
+</main>
+
+<div id="psm-clinic-app" hidden></div>
+<div id="toast" hidden></div>
+<div id="modalHost"></div>
+
+<script>
+/* ===================== constants ===================== */
+const VACCINES = {
+  'Flu':            { short: 'Flu', ravs: 'Flu', target: 'RAVS', main: true },
+  'COVID-19':       { short: 'COVID', ravs: 'COVID-19', target: 'RAVS', main: true },
+  'Nasal flu':      { short: 'Nasal', ravs: 'Flu', target: 'RAVS' },
+  'MMR':            { short: 'MMR', ravs: 'MMR', target: 'RAVS' },
+  'MenB':           { short: 'MenB', ravs: 'MenB', target: 'RAVS' },
+  'Pneumococcal':   { short: 'PPV', ravs: '', target: 'PPV record' },
+  'Private flu':    { short: 'Priv flu', ravs: '', target: 'Private system' },
+  'Private COVID':  { short: 'Priv COVID', ravs: '', target: 'Private system' },
+};
+const RAVS_REASONS = ['Based on age', 'Healthcare worker', 'Pregnant', 'In a clinical risk group', 'Resident in a care home', 'Carer', 'Social care worker', 'Household contact of someone immunosuppressed', 'Homeless'];
+const FLU_UNDER_REASONS = RAVS_REASONS.slice(1);
+const COVID_UNDER_REASONS = ['In a clinical risk group', 'Resident in a care home'];
+const SITES = ['Left upper arm', 'Right upper arm', 'Somewhere else'];
+const CONSENTS = ['Patient', "Clinician acting in the patient's best interests", 'Person with lasting power of attorney for health and welfare', 'Parent or guardian', 'Independent mental capacity advocate', 'Court appointed deputy'];
+const STATUS_LABEL = { booked: 'Booked', waiting: 'Waiting', given: 'Given', entered: 'On record', notgiven: 'Not given', checkedin: 'Checked in' };
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+/* ===================== small helpers ===================== */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const todayIso = () => isoDate(new Date());
+const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+
+function ukDate(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
+function longDate(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-').map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; }
+function parseDob(s) {
+  s = String(s || '').trim();
+  let m = s.match(/^(\d{1,2})[\/\.\-\s](\d{1,2})[\/\.\-\s](\d{2,4})$/) || s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!m) { const t = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/); if (t) { const mi = MONTHS.findIndex(x => x.toLowerCase().startsWith(t[2].toLowerCase().slice(0, 3))); if (mi >= 0) m = [0, t[1], mi + 1, t[3]]; } }
+  if (!m) return null;
+  let [_, d, mo, y] = m; d = +d; mo = +mo; y = +y;
+  if (y < 100) y += y > (new Date().getFullYear() % 100) ? 1900 : 2000;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  if (dt > new Date()) return null;
+  return isoDate(dt);
+}
+function ageOn(dobIso, onIso) {
+  if (!dobIso) return null;
+  const [by, bm, bd] = dobIso.split('-').map(Number), [y, m, d] = onIso.split('-').map(Number);
+  let a = y - by; if (m < bm || (m === bm && d < bd)) a--; return a;
+}
+function cleanNhs(s) { return String(s || '').replace(/\D/g, ''); }
+function fmtNhs(s) { s = cleanNhs(s); return s.length === 10 ? `${s.slice(0, 3)} ${s.slice(3, 6)} ${s.slice(6)}` : s; }
+function nhsValid(s) {
+  s = cleanNhs(s); if (!/^\d{10}$/.test(s)) return false;
+  let sum = 0; for (let i = 0; i < 9; i++) sum += +s[i] * (10 - i);
+  let c = 11 - (sum % 11); if (c === 11) c = 0; if (c === 10) return false; return c === +s[9];
+}
+function fmtPostcode(s) { s = String(s || '').toUpperCase().replace(/\s+/g, ''); return s.length > 3 ? s.slice(0, -3) + ' ' + s.slice(-3) : s; }
+function daysBetween(aIso, bIso) { return Math.round((new Date(bIso) - new Date(aIso)) / 86400000); }
+function fullName(r) { return `${(r.surname || '').toUpperCase()}${r.given ? ', ' + r.given : ''}`; }
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600); }
+async function copyText(text, btn) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch (e2) {} ta.remove();
+  }
+  if (btn) { btn.textContent = ok ? 'Copied' : 'Select'; btn.classList.toggle('done', ok); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1500); }
+}
+
+/* ===================== eligibility ===================== */
+function checkEligibility(vaccine, dobIso, S) {
+  const today = todayIso();
+  const ageNow = ageOn(dobIso, today);
+  if (!dobIso) return { state: 'unknown', text: 'Enter date of birth to check' };
+  if (vaccine === 'Flu') {
+    const a = ageOn(dobIso, S.fluDate);
+    if (a >= S.fluAge) return { state: 'age', text: `${a} by ${ukDate(S.fluDate)}, eligible by age`, product: 'aTIV' };
+    if (ageNow < 18) return { state: 'blocked', text: `Age ${ageNow}. The adult service is 18 and over.` };
+    return { state: 'reason', text: `Age ${ageNow}, under ${S.fluAge}. The patient needs to give a reason.`, reasons: FLU_UNDER_REASONS, product: 'TIVc' };
+  }
+  if (vaccine === 'COVID-19') {
+    const a = ageOn(dobIso, S.covDate);
+    if (a >= S.covAge) return { state: 'age', text: `${a} by ${ukDate(S.covDate)}, eligible by age` };
+    if (ageNow < 18) return { state: 'blocked', text: `Age ${ageNow}. Pharmacy COVID vaccination is 18 and over.` };
+    return { state: 'reason', text: `Age ${ageNow}, under ${S.covAge}. Only immunosuppressed patients or care home residents qualify.`, reasons: COVID_UNDER_REASONS };
+  }
+  if (vaccine === 'Nasal flu') {
+    if (S.nasalFrom && S.nasalTo && (dobIso < S.nasalFrom || dobIso > S.nasalTo)) return { state: 'warn', text: `Born outside ${ukDate(S.nasalFrom)} to ${ukDate(S.nasalTo)}. Check they are eligible.` };
+    return { state: 'age', text: 'Date of birth is in the 2 to 3 year old range' };
+  }
+  return { state: 'free', text: '' };
+}
+function defaultProduct(vaccine, dobIso, S) {
+  const prods = (S.products || []).filter(p => p.vaccine === vaccine && p.active);
+  if (vaccine === 'Flu') {
+    const a = dobIso ? ageOn(dobIso, S.fluDate) : null;
+    const want = a != null && a >= S.fluAge ? /aTIV|adjuvant/i : /TIVc|cell/i;
+    return (prods.find(p => want.test(p.product)) || prods[0] || {}).product || '';
+  }
+  return (prods[0] || {}).product || '';
+}
+function batchFor(product, S) { const p = (S.products || []).find(p => p.product === product && p.active); return p ? p.batch : ''; }
+
+/* ===================== booking paste parser ===================== */
+function parseBookings(text, dateIso) {
+  const out = [];
+  const lines = String(text).replace(/\r/g, '').split('\n').map(l => l.replace(/\t+/g, ' | ').trim()).filter(Boolean);
+  const joined = lines.join(' \u0001 ');
+  const parts = joined.split(/(?:^|\u0001)\s*(?=\d{2}:\d{2}\b)/);
+  for (const raw of parts) {
+    const p = raw.replace(/\u0001/g, ' ').replace(/\s+/g, ' ').trim();
+    const tm = p.match(/^(\d{2}:\d{2})\b/); if (!tm) continue;
+    const nhs = p.match(/\b(\d{3}\s?\d{3}\s?\d{4})\b/);
+    const dobm = p.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/i);
+    if (!dobm) continue;
+    const dob = parseDob(`${dobm[1]} ${dobm[2]} ${dobm[3]}`);
+    const nameEnd = nhs ? p.indexOf(nhs[0]) : p.indexOf(dobm[0]);
+    let name = p.slice(tm[0].length, nameEnd).replace(/\|/g, ' ').trim();
+    const words = name.split(/\s+/).filter(Boolean);
+    const surname = words.length > 1 ? words.pop() : (words[0] || '');
+    const given = words.join(' ');
+    const svc = p.slice(p.indexOf(dobm[0]) + dobm[0].length);
+    const vax = [];
+    const s = svc.toLowerCase();
+    if (/flu 2 to 3/.test(s)) vax.push('Nasal flu');
+    else if (/flu/.test(s)) vax.push('Flu');
+    if (/covid/.test(s)) vax.push('COVID-19');
+    const service = (svc.match(/(Flu and COVID[^|]*?(?:65\+|18 to 64)|Flu 65\+|Flu 18 to 64|Flu 2 to 3|COVID 18\+|COVID 12 to 17)/i) || [''])[0];
+    out.push({ time: tm[1], given: titleCase(given), surname: surname.toUpperCase(), nhs: nhs ? cleanNhs(nhs[1]) : '', dob, vaccines: vax.length ? vax : ['Flu'], service, date: dateIso });
+  }
+  return out;
+}
+function titleCase(s) { return String(s || '').toLowerCase().replace(/\b([a-z])/g, c => c.toUpperCase()); }
+
+/* ===================== data layer ===================== */
+const DEFAULT_SETTINGS = {
+  products: [
+    { vaccine: 'Flu', product: 'Adjuvanted Trivalent Influenza Vaccine (aTIV)', batch: '', expiry: '', active: true },
+    { vaccine: 'Flu', product: 'Cell-based Trivalent Influenza Vaccine (TIVc)', batch: '', expiry: '', active: true },
+    { vaccine: 'COVID-19', product: 'COVID-19 vaccine (set product)', batch: '', expiry: '', active: true },
+    { vaccine: 'Nasal flu', product: 'Fluenz (LAIV)', batch: '', expiry: '', active: true },
+  ],
+  vaccinators: [], staff: [], vaccinator: '', site: 'Left upper arm', consent: 'Patient',
+  locations: ['Pharmacy', 'Off-site: Kingston Council'],
+  fluAge: 65, fluDate: '2027-03-31', covAge: 75, covDate: '2027-01-31', seasonStart: '2026-09-01',
+  nasalFrom: '2022-09-01', nasalTo: '2024-08-31',
+};
+
+const hasGas = typeof google !== 'undefined' && google.script && google.script.run;
+function gas(fn, ...args) {
+  return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+}
+
+/* Demo backend: same calls as Code.gs, kept in this browser only. */
+const Demo = (() => {
+  const KEY = 'psmClinicDemo.v1';
+  let db = store.get(KEY, null);
+  function save() { db.version++; store.set(KEY, db); }
+  function nhsWithCheck(base9) { for (;;) { let sum = 0; for (let i = 0; i < 9; i++) sum += +base9[i] * (10 - i); let c = 11 - (sum % 11); if (c === 11) c = 0; if (c !== 10) return base9 + c; base9 = String(+base9 + 1); } }
+  function seed() {
+    const t = todayIso(), y = isoDate(new Date(Date.now() - 86400000)), old = isoDate(new Date(Date.now() - 11 * 86400000));
+    const S = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    S.products[0].batch = 'DEMO-A101'; S.products[0].expiry = '2027-05-01';
+    S.products[1].batch = 'DEMO-C202'; S.products[1].expiry = '2027-04-01';
+    S.products[2].product = 'Comirnaty (demo)'; S.products[2].batch = 'DEMO-P303'; S.products[2].expiry = '2027-02-01';
+    S.products[3].batch = 'DEMO-L404'; S.products[3].expiry = '2027-01-15';
+    S.vaccinators = ['A. Vaccinator', 'B. Pharmacist']; S.vaccinator = 'A. Vaccinator'; S.staff = ['Front desk 1', 'Front desk 2'];
+    const people = [
+      ['Sample', 'Alice', '1948-02-14', 'KT6 1AA', ['Flu', 'COVID-19'], 'entered', y],
+      ['Example', 'Brian', '1955-07-30', 'KT6 2BB', ['Flu'], 'given', y],
+      ['Testcase', 'Carol', '1950-11-02', 'KT5 3CC', ['Flu', 'COVID-19'], 'given', old],
+      ['Dummy', 'David', '1944-03-09', 'KT6 4DD', ['Flu', 'COVID-19'], 'given', t],
+      ['Placeholder', 'Erin', '1986-05-21', 'KT6 5EE', ['Flu'], 'given', t],
+      ['Mockford', 'Frank', '1952-09-17', 'KT5 6FF', ['Flu'], 'waiting', t],
+      ['Fakeley', 'Grace', '1979-12-03', 'KT6 7GG', ['Flu', 'COVID-19'], 'waiting', t],
+      ['Notreal', 'Harry', '1940-06-25', 'KT6 8HH', ['Flu', 'COVID-19'], 'booked', t],
+      ['Pretend', 'Isla', '1962-01-11', 'KT5 9JJ', ['Flu'], 'booked', t],
+    ];
+    const rows = [];
+    people.forEach((p, i) => {
+      const visitId = uid() + i, nhs = nhsWithCheck('99900' + String(1000 + i * 37).padStart(4, '0'));
+      p[4].forEach(v => {
+        const prod = defaultProduct(v, p[2], S);
+        const e = checkEligibility(v, p[2], S);
+        rows.push({ id: uid() + i + v.length, visitId, date: p[6], time: p[5] === 'booked' ? `1${i % 5}:${i % 2 ? '30' : '00'}` : `0${9 + (i % 1)}:${pad(10 + i * 5)}`, source: p[5] === 'booked' ? 'Booked' : 'Walk-in',
+          nhs, surname: p[0].toUpperCase(), given: p[1], dob: p[2], postcode: p[3], phone: '', vaccine: v, product: prod,
+          batch: ['given', 'entered'].includes(p[5]) ? batchFor(prod, S) : '', eligibility: e.state === 'age' ? 'Based on age' : 'In a clinical risk group', eligNote: e.state === 'age' ? '' : 'Asthma (demo)',
+          consent: 'Patient', site: 'Left upper arm', vaccinator: ['given', 'entered'].includes(p[5]) ? 'A. Vaccinator' : '', deskBy: 'Front desk 1', location: 'Pharmacy',
+          status: p[5], givenAt: ['given', 'entered'].includes(p[5]) ? p[6] + ' 10:15' : '', enteredAt: p[5] === 'entered' ? p[6] + ' 17:40' : '', enteredBy: p[5] === 'entered' ? 'Front desk 2' : '', note: '', updatedAt: new Date().toISOString() });
+      });
+    });
+    // a few earlier days for the season table
+    for (let k = 2; k <= 9; k++) {
+      const d = isoDate(new Date(Date.now() - k * 86400000));
+      const n = 40 + ((k * 23) % 60);
+      for (let j = 0; j < n; j++) {
+        const v = j % 3 === 0 ? 'COVID-19' : 'Flu';
+        rows.push({ id: uid() + k + '_' + j, visitId: 'h' + k + '_' + j, date: d, time: '10:00', source: j % 4 ? 'Walk-in' : 'Booked', nhs: '', surname: 'HISTORIC', given: 'Demo', dob: '1950-01-01', postcode: '', phone: '', vaccine: v, product: '', batch: '', eligibility: 'Based on age', eligNote: '', consent: 'Patient', site: 'Left upper arm', vaccinator: j % 2 ? 'A. Vaccinator' : 'B. Pharmacist', deskBy: '', location: 'Pharmacy', status: k === 11 ? 'given' : 'entered', givenAt: d + ' 10:00', enteredAt: d + ' 18:00', enteredBy: '', note: '', updatedAt: '' });
+      }
+    }
+    db = { version: 1, settings: S, rows };
+    store.set(KEY, db);
+  }
+  if (!db || !db.rows) seed();
+  const api = {
+    async board(version, today) {
+      if (version === db.version) return { unchanged: true, version };
+      return boardFrom(db.rows, db.settings, db.version, today);
+    },
+    async register(visit) {
+      if (visit.bookingVisitId) db.rows.forEach(r => { if (r.visitId === visit.bookingVisitId && r.status === 'booked') { r.status = 'checkedin'; r.updatedAt = new Date().toISOString(); } });
+      visit.rows.forEach(r => db.rows.push(r)); save(); return { ok: true, version: db.version };
+    },
+    async update(ids, patch) { db.rows.forEach(r => { if (ids.includes(r.id)) { Object.assign(r, patch); r.updatedAt = new Date().toISOString(); } }); save(); return { ok: true }; },
+    async updateEach(changes) { changes.forEach(c => { const r = db.rows.find(x => x.id === c.id); if (r) { Object.assign(r, c.patch); r.updatedAt = new Date().toISOString(); } }); save(); return { ok: true }; },
+    async importBookings(rows) { const have = new Set(db.rows.filter(r => r.status === 'booked' || r.status === 'checkedin').map(r => r.date + '|' + r.nhs + '|' + r.dob)); let n = 0; const seen = new Set(); rows.forEach(r => { const k = r.date + '|' + r.nhs + '|' + r.dob; if (have.has(k)) return; db.rows.push(r); seen.add(r.visitId); }); n = seen.size; save(); return { added: n }; },
+    async search(q, seasonStart) { return searchRows(db.rows, q, seasonStart); },
+    async saveSettings(s) { db.settings = s; save(); return { ok: true }; },
+    async exportRows(from, to) { return db.rows.filter(r => r.date >= from && r.date <= to && r.status !== 'checkedin'); },
+  };
+  return api;
+})();
+
+/* Shared by both backends (Code.gs has the same logic for the real sheet). */
+function boardFrom(rows, settings, version, today) {
+  const live = rows.filter(r => r.date === today || r.status === 'given');
+  const byDay = {};
+  rows.forEach(r => {
+    if (r.status === 'checkedin') return;
+    const d = byDay[r.date] || (byDay[r.date] = { date: r.date, booked: 0, given: 0, entered: 0, notgiven: 0, waiting: 0, byVax: {} });
+    if (r.status === 'booked') d.booked++;
+    else if (r.status === 'waiting') d.waiting++;
+    else if (r.status === 'notgiven') d.notgiven++;
+    else if (r.status === 'given' || r.status === 'entered') { d.given++; d.byVax[r.vaccine] = (d.byVax[r.vaccine] || 0) + 1; if (r.status === 'entered') d.entered++; }
+  });
+  return { version, settings, rows: live, days: Object.values(byDay).sort((a, b) => b.date.localeCompare(a.date)) };
+}
+function searchRows(rows, q, seasonStart) {
+  q = String(q || '').trim().toLowerCase(); if (q.length < 2) return [];
+  const qn = cleanNhs(q), qd = parseDob(q);
+  return rows.filter(r => r.status !== 'checkedin' && r.date >= (seasonStart || '') && (
+    (qn.length >= 6 && r.nhs.includes(qn)) || (qd && r.dob === qd) ||
+    (`${r.surname} ${r.given}`.toLowerCase().includes(q)) || (`${r.given} ${r.surname}`.toLowerCase().includes(q))
+  )).slice(-80).reverse();
+}
+
+const API = hasGas ? {
+  board: (v, t) => gas('apiBoard', v, t),
+  register: v => gas('apiRegister', v),
+  update: (ids, p) => gas('apiUpdate', ids, p),
+  updateEach: c => gas('apiUpdateEach', c),
+  importBookings: r => gas('apiImportBookings', r),
+  search: (q, s) => gas('apiSearch', q, s),
+  saveSettings: s => gas('apiSaveSettings', s),
+  exportRows: (f, t) => gas('apiExport', f, t),
+} : Demo;
+
+/* ===================== state ===================== */
+let S = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+let ROWS = [], DAYS = [], VERSION = -1;
+let me = store.get('psm.me', '');
+let form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '' };
+let todoFilter = 'All';
+let editing = null;
+
+async function refresh(force) {
+  try {
+    const b = await API.board(force ? -1 : VERSION, todayIso());
+    setSync(true);
+    if (b.unchanged) return;
+    const sj = JSON.stringify(b.settings || {}), settingsChanged = sj !== refresh._sj; refresh._sj = sj;
+    VERSION = b.version; S = Object.assign({}, DEFAULT_SETTINGS, b.settings || {}); ROWS = b.rows || []; DAYS = b.days || [];
+    renderAll(settingsChanged);
+  } catch (e) { setSync(false, e); }
+}
+function setSync(ok, e) { $('#syncDot').classList.toggle('off', !ok); $('#syncText').textContent = ok ? 'Live' : 'Offline, retrying'; if (!ok) console.warn(e); }
+
+function visits(rows) {
+  const m = new Map();
+  rows.forEach(r => { if (!m.has(r.visitId)) m.set(r.visitId, []); m.get(r.visitId).push(r); });
+  return [...m.values()];
+}
+
+/* ===================== rendering ===================== */
+function renderAll(settingsChanged) {
+  $('#todayLabel').textContent = longDate(todayIso());
+  if (settingsChanged) { renderMe(); renderDeskForm(); renderSettings(); }
+  renderDeskLists(); renderVax(); renderTodo(); renderRecords();
+}
+function renderMe() {
+  const people = [...new Set([...(S.staff || []), ...(S.vaccinators || [])])];
+  $('#meSel').innerHTML = '<option value="">Who are you?</option>' + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('');
+}
+function statusPill(st, extra = '') { return `<span class="pill p-${st}">${STATUS_LABEL[st] || st}${extra}</span>`; }
+function vaxPills(vs) { return vs.map(r => `<span class="pill p-${r.status}" title="${esc(STATUS_LABEL[r.status])}">${esc(VACCINES[r.vaccine]?.short || r.vaccine)}</span>`).join(' '); }
+
+/* ---------- front desk ---------- */
+let showMoreVax = false;
+function setCount(id, n) { const c = $(id); c.textContent = n || ''; c.dataset.n = n || 0; return c; }
+function renderDeskForm() {
+  const main = Object.keys(VACCINES).filter(v => VACCINES[v].main), more = Object.keys(VACCINES).filter(v => !VACCINES[v].main);
+  const openMore = showMoreVax || more.some(v => form.vaccines.includes(v));
+  $('#vaxMain').innerHTML = main.map(v => `<button type="button" class="chip" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)}</button>`).join('') +
+    (openMore ? '' : `<button type="button" class="chip more" data-morevax>More vaccines</button>`);
+  $('#vaxMore').hidden = !openMore;
+  $('#vaxMore').innerHTML = more.map(v => `<button type="button" class="chip small" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)}</button>`).join('');
+  const locs = S.locations || ['Pharmacy'], loc = $('#fLocation').value || store.get('psm.loc', locs[0]);
+  $('#fLocation').innerHTML = locs.map(l => `<option ${l === loc ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  $('#srcPill').textContent = form.source; $('#srcPill').className = 'pill ' + (form.source === 'Booked' ? 'p-booked' : 'p-neutral');
+  $('#formTitle').textContent = form.bookingVisitId ? 'Check in booked patient' : 'Register a patient';
+  renderExtraSum(); renderElig();
+}
+function renderExtraSum() {
+  const locs = S.locations || ['Pharmacy'], bits = [];
+  if ($('#fLocation').value && $('#fLocation').value !== locs[0]) bits.push($('#fLocation').value);
+  if ($('#fPhone').value.trim()) bits.push('phone added');
+  if ($('#fNote').value.trim()) bits.push('note added');
+  $('#extraSum').textContent = bits.length ? '· ' + bits.join(', ') : '';
+}
+function renderElig() {
+  const dob = parseDob($('#fDob').value);
+  const box = $('#eligBox');
+  if (!form.vaccines.length) { box.innerHTML = '<div class="eline warn"><span class="ic">!</span><span>Choose at least one vaccine.</span></div>'; return; }
+  if (!dob) { box.innerHTML = ''; return; }
+  const line = (cls, ic, v, text) => `<div class="eline ${cls}"><span class="ic">${ic}</span><span><b>${esc(v)}</b> · ${esc(text)}</span></div>`;
+  box.innerHTML = form.vaccines.map(v => {
+    const e = checkEligibility(v, dob, S); const cur = form.elig[v] || {};
+    let body = '';
+    if (e.state === 'age') body = line('ok', '✓', v, e.text);
+    else if (e.state === 'blocked') body = line('bad', '×', v, e.text);
+    else if (e.state === 'unknown') body = line('muted', '·', v, e.text);
+    else if (e.state === 'warn') body = line('warn', '!', v, e.text);
+    else if (e.state === 'reason') body = line('warn', '!', v, e.text) + `<div class="pair">
+      <select data-elig-reason="${esc(v)}" aria-label="Reason for ${esc(v)}"><option value="">Reason the patient gives…</option>${e.reasons.map(r => `<option ${cur.reason === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
+      <input data-elig-note="${esc(v)}" placeholder="Detail, e.g. condition" value="${esc(cur.note || '')}" aria-label="Detail for ${esc(v)}"></div>`;
+    else body = line('muted', '·', v, 'No age rule') + `<div class="pair"><input data-elig-note="${esc(v)}" placeholder="Eligibility or reason (optional)" value="${esc(cur.note || '')}" aria-label="Eligibility for ${esc(v)}"></div>`;
+    return `<div class="elig">${body}</div>`;
+  }).join('');
+}
+function renderDeskLists() {
+  const t = todayIso();
+  const today = ROWS.filter(r => r.date === t && r.status !== 'checkedin');
+  const vs = visits(today);
+  const booked = vs.filter(v => v.every(r => r.status === 'booked')).sort((a, b) => a[0].time.localeCompare(b[0].time));
+  const reg = vs.filter(v => !v.every(r => r.status === 'booked')).sort((a, b) => b[0].time.localeCompare(a[0].time));
+  const waiting = vs.filter(v => v.some(r => r.status === 'waiting')).length;
+  const done = vs.filter(v => v.some(r => r.status === 'given' || r.status === 'entered')).length;
+  $('#deskSummary').innerHTML = `<span><b>${done}</b> vaccinated</span>${waiting ? `<span><b>${waiting}</b> waiting</span>` : ''}<span><b>${booked.length}</b> bookings still to arrive</span>`;
+  setCount('#cDesk', reg.length);
+  $('#bookedList').innerHTML = booked.length ? booked.map(v => {
+    const r = v[0];
+    return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span><span>${esc(v.map(x => VACCINES[x.vaccine]?.short || x.vaccine).join(' + '))}</span></div></div>
+      <div class="right"><button class="btn sm primary" data-checkin="${esc(r.visitId)}">Check in</button></div></div>`;
+  }).join('') : '<div class="empty">No bookings waiting. Use Paste bookings to bring in today\'s list.</div>';
+}
+function readForm() {
+  return {
+    nhs: cleanNhs($('#fNhs').value), dob: parseDob($('#fDob').value), given: titleCase($('#fGiven').value.trim()), surname: $('#fSurname').value.trim().toUpperCase(),
+    postcode: fmtPostcode($('#fPostcode').value), phone: $('#fPhone').value.trim(), location: $('#fLocation').value, note: $('#fNote').value.trim(),
+  };
+}
+function validateForm(f) {
+  const errs = [];
+  if (!f.dob) errs.push('Enter a valid date of birth.');
+  if (f.nhs && !nhsValid(f.nhs)) errs.push('The NHS number is not valid. Check the digits.');
+  if (!f.nhs && !(f.surname && f.given)) errs.push('Enter the NHS number, or first and last name.');
+  if (!form.vaccines.length) errs.push('Choose at least one vaccine.');
+  form.vaccines.forEach(v => {
+    const e = checkEligibility(v, f.dob, S);
+    if (e.state === 'blocked') errs.push(`${v}: ${e.text}`);
+    if (e.state === 'reason' && !(form.elig[v] || {}).reason) errs.push(`${v}: choose the reason the patient gives.`);
+  });
+  return errs;
+}
+async function submitDesk(ev) {
+  ev.preventDefault();
+  const mode = ev.submitter?.dataset.mode || 'given';
+  const f = readForm(); const errs = validateForm(f);
+  if (mode === 'given' && !S.vaccinator) errs.push('Choose the vaccinator on duty first (Change, at the top).');
+  if (errs.length) { $('#dupBox').innerHTML = `<div class="alert bad">${errs.map(esc).join('<br>')}</div>`; return; }
+  const visitId = uid(), now = new Date().toISOString(), t = todayIso(), time = nowTime(), given = mode === 'given';
+  const rows = form.vaccines.map(v => {
+    const e = checkEligibility(v, f.dob, S), el = form.elig[v] || {};
+    return { id: uid(), visitId, date: t, time, source: form.source, nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone,
+      vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S) : '', eligibility: e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''), eligNote: el.note || '',
+      consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? 'given' : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: '', enteredBy: '', note: f.note, updatedAt: now };
+  });
+  $('#regBtn').disabled = $('#waitBtn').disabled = true;
+  try {
+    await API.register({ rows, bookingVisitId: form.bookingVisitId });
+    toast(`${f.given || f.surname || 'Patient'} ${given ? 'saved as vaccinated' : 'added to the waiting list'}`);
+    clearForm(); await refresh(true);
+  } catch (e) { $('#dupBox').innerHTML = `<div class="alert bad">Could not save. Check the connection and try again. (${esc(e.message || e)})</div>`; }
+  finally { $('#regBtn').disabled = $('#waitBtn').disabled = false; }
+}
+function clearForm() {
+  $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '' }; showMoreVax = false;
+  $('#nhsHint').textContent = ''; $('#dobHint').textContent = ''; $('#dupBox').innerHTML = '';
+  renderDeskForm(); $('#fNhs').focus();
+}
+let dupTimer;
+function checkDuplicates() {
+  clearTimeout(dupTimer);
+  dupTimer = setTimeout(async () => {
+    const f = readForm(); const box = $('#dupBox');
+    const q = f.nhs.length === 10 ? f.nhs : (f.dob && f.surname ? f.surname : '');
+    if (!q) { box.innerHTML = ''; return; }
+    let hits = await API.search(q, S.seasonStart);
+    hits = hits.filter(r => (f.nhs && r.nhs === f.nhs) || (f.dob && r.dob === f.dob && r.surname === f.surname));
+    hits = hits.filter(r => r.visitId !== form.bookingVisitId);
+    const booking = hits.find(r => r.status === 'booked' && r.date === todayIso());
+    const had = hits.filter(r => ['given', 'entered', 'waiting'].includes(r.status));
+    let html = '';
+    if (booking && !form.bookingVisitId) html += `<div class="alert info">This patient has a booking today at ${esc(booking.time)}. <button type="button" class="btn sm" data-checkin="${esc(booking.visitId)}">Use the booking</button></div>`;
+    if (had.length) html += `<div class="alert warn">Already seen this season: ${had.map(r => `${esc(r.vaccine)} on ${esc(ukDate(r.date))} (${esc(STATUS_LABEL[r.status])})`).join(', ')}</div>`;
+    box.innerHTML = html;
+  }, 350);
+}
+function checkInBooking(visitId) {
+  const v = ROWS.filter(r => r.visitId === visitId);
+  if (!v.length) return;
+  const r = v[0];
+  clearForm();
+  $('#fNhs').value = fmtNhs(r.nhs); $('#fDob').value = ukDate(r.dob); $('#fGiven').value = r.given; $('#fSurname').value = r.surname; $('#fPostcode').value = r.postcode || ''; $('#fPhone').value = r.phone || '';
+  form.vaccines = v.map(x => x.vaccine); form.source = 'Booked'; form.bookingVisitId = visitId;
+  showTab('desk'); renderDeskForm(); onDobInput(); onNhsInput(); checkDuplicates();
+  $('#fPostcode').focus();
+}
+function onNhsInput() {
+  const n = cleanNhs($('#fNhs').value), h = $('#nhsHint');
+  if (!n) { h.textContent = ''; h.className = 'hint'; return; }
+  if (n.length < 10) { h.textContent = `${n.length} of 10 digits`; h.className = 'hint'; return; }
+  const ok = nhsValid(n); h.textContent = ok ? 'Valid NHS number' : 'Not a valid NHS number'; h.className = 'hint ' + (ok ? 'ok' : 'bad');
+}
+function onDobInput() {
+  const d = parseDob($('#fDob').value), h = $('#dobHint');
+  if (!$('#fDob').value) { h.textContent = ''; } else if (!d) { h.textContent = 'Use dd/mm/yyyy'; h.className = 'hint bad'; } else { h.textContent = `${longDate(d)}, age ${ageOn(d, todayIso())}`; h.className = 'hint ok'; }
+  renderElig();
+}
+
+/* ---------- vaccinator ---------- */
+function renderVax() {
+  const prods = (S.products || []).filter(p => p.active);
+  const noBatch = prods.filter(p => !p.batch);
+  $('#defaultsBar').innerHTML = `<span><b>Today</b></span><span>Vaccinator <b>${esc(S.vaccinator || 'not set')}</b></span><span>Site <b>${esc(S.site)}</b></span><span>Consent <b>${esc(S.consent)}</b></span>` +
+    `<span title="${esc(prods.map(p => `${shortProduct(p.product)}: ${p.batch || 'no batch'}`).join('\n'))}">${noBatch.length ? `<span class="warnx">${noBatch.length} batch${noBatch.length > 1 ? 'es' : ''} not set</span>` : `Batches <b>${prods.length} set</b>`}</span>` +
+    `<button class="btn sm ghost" data-goto="settings" type="button">Change</button>`;
+  const t = todayIso();
+  const vs = visits(ROWS.filter(r => r.date === t));
+  const waiting = vs.filter(v => v.some(r => r.status === 'waiting')).sort((a, b) => a[0].time.localeCompare(b[0].time));
+  const given = vs.filter(v => v.some(r => ['given', 'entered', 'notgiven'].includes(r.status)) && !v.some(r => r.status === 'waiting')).sort((a, b) => (b[0].givenAt || '').localeCompare(a[0].givenAt || ''));
+  $('#waitWrap').hidden = !waiting.length;
+  $('#waitCount').textContent = waiting.length ? `· ${waiting.length}, oldest first` : '';
+  $('#givenCount').textContent = given.length ? '· ' + given.length : '';
+  $('#waitList').innerHTML = waiting.length ? waiting.map((v, i) => visitCard(v, i === 0)).join('') : '';
+  if (editing && !vs.some(v => v[0].visitId === editing)) { const ev = ROWS.filter(r => r.visitId === editing); if (ev.length) given.unshift(ev); }
+  $('#givenList').innerHTML = given.length ? given.map(v => editing === v[0].visitId ? `<div class="row" style="display:block">${visitCard(v, false, true)}</div>` : givenRow(v)).join('') : '<div class="empty">Nobody vaccinated yet today.</div>';
+}
+function shortProduct(p) { const m = String(p).match(/\(([^)]+)\)\s*$/); return m ? m[1] : p; }
+function doseLine(d) {
+  const defBatch = batchFor(d.product, S), batch = d.batch || defBatch;
+  const bits = [`<b>${esc(shortProduct(d.product) || '–')}</b>`];
+  if (!batch) bits.push('<span class="warnx" style="color:var(--warn)">no batch</span>'); else if (d.batch && d.batch !== defBatch) bits.push(`Batch <b class="mono">${esc(d.batch)}</b>`);
+  if (d.eligibility && d.eligibility !== 'Based on age') bits.push(`${esc(d.eligibility)}${d.eligNote ? ': ' + esc(d.eligNote) : ''}`);
+  else if (d.eligNote) bits.push(esc(d.eligNote));
+  if (d.site !== S.site) bits.push(esc(d.site));
+  if (d.consent !== 'Patient') bits.push(`Consent: ${esc(d.consent)}`);
+  return `<div class="dose"><span class="vx">${esc(d.vaccine)}</span><span class="det">${bits.map(x => `<span>${x}</span>`).join('')}</span></div>`;
+}
+function visitCard(v, next, inGiven) {
+  const r = v[0], age = ageOn(r.dob, todayIso());
+  const isEdit = editing === r.visitId;
+  const doses = v.map(d => isEdit ? doseEditor(d) : doseLine(d)).join('');
+  const btns = isEdit
+    ? `<button class="btn primary" data-save-edit="${esc(r.visitId)}">Save changes</button><button class="btn ghost" data-cancel-edit>Cancel</button>`
+    : `<button class="btn go" data-give="${esc(r.visitId)}">Vaccinated</button><button class="btn" data-edit="${esc(r.visitId)}">Edit</button><button class="btn ghost" data-notgiven="${esc(r.visitId)}">Not given</button>`;
+  const meta = [`Age ${age}`, `<span class="mono">${esc(ukDate(r.dob))}</span>`, r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : '', `${esc(r.source)} ${esc(r.time)}`, r.location !== 'Pharmacy' ? esc(r.location) : ''].filter(Boolean);
+  const body = `<div class="head"><span class="nm">${esc(fullName(r))}</span><span class="meta">${meta.map(m => `<span>${m}</span>`).join('')}</span></div>
+    ${r.note ? `<div class="alert info small">${esc(r.note)}</div>` : ''}<div class="doses">${doses}</div><div class="actions">${btns}</div>`;
+  return inGiven ? `<div style="display:grid;gap:14px">${body}</div>` : `<div class="card ${next ? 'next' : ''}">${body}</div>`;
+}
+function givenRow(v) {
+  const r = v[0];
+  return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub">${v.map(d => `<span>${esc(VACCINES[d.vaccine]?.short || d.vaccine)} ${esc(shortProduct(d.product))}</span>`).join('')}</div></div>
+    <div class="right"><span class="pills">${v.map(d => d.status === 'given' ? '' : statusPill(d.status)).join('')}</span><button class="btn sm" data-edit="${esc(r.visitId)}">Edit</button>${v.some(d => d.status === 'given') ? `<button class="btn sm ghost" data-undo="${esc(r.visitId)}" title="Back to waiting">Undo</button>` : ''}</div></div>`;
+}
+function doseEditor(d) {
+  const prods = (S.products || []).filter(p => p.vaccine === d.vaccine);
+  const opt = (list, cur) => list.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
+  const reasons = d.vaccine === 'COVID-19' ? ['Based on age', ...COVID_UNDER_REASONS] : RAVS_REASONS;
+  return `<div class="doseedit" data-dose="${esc(d.id)}"><div class="vx">${esc(d.vaccine)}</div><div class="editgrid">
+    <div class="f"><label>Product</label><select data-k="product">${opt(prods.map(p => p.product).concat(prods.some(p => p.product === d.product) || !d.product ? [] : [d.product]), d.product)}</select></div>
+    <div class="f"><label>Batch</label><input class="mono" data-k="batch" value="${esc(d.batch || batchFor(d.product, S))}"></div>
+    <div class="f"><label>Eligibility</label><select data-k="eligibility"><option value=""></option>${opt(reasons, d.eligibility)}</select></div>
+    <div class="f"><label>Detail</label><input data-k="eligNote" value="${esc(d.eligNote)}"></div>
+    <div class="f"><label>Site</label><select data-k="site">${opt(SITES, d.site)}</select></div>
+    <div class="f"><label>Consent</label><select data-k="consent">${opt(CONSENTS, d.consent)}</select></div>
+    <div class="f"><label>Vaccinator</label><select data-k="vaccinator"><option value=""></option>${opt(S.vaccinators || [], d.vaccinator)}</select></div>
+    <div class="f"><label>Status</label><select data-k="status">${['waiting', 'given', 'entered', 'notgiven'].map(s => `<option value="${s}" ${s === d.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select></div>
+  </div></div>`;
+}
+async function giveVisit(visitId) {
+  const now = new Date(); const stamp = `${todayIso()} ${nowTime()}`;
+  const changes = ROWS.filter(r => r.visitId === visitId && r.status === 'waiting').map(r => ({ id: r.id, patch: { status: 'given', givenAt: stamp, batch: r.batch || batchFor(r.product, S), vaccinator: r.vaccinator || S.vaccinator, site: r.site || S.site, consent: r.consent || S.consent } }));
+  if (!S.vaccinator) toast('Set the vaccinator on duty in Settings');
+  await API.updateEach(changes); toast('Marked as vaccinated'); await refresh(true);
+}
+
+/* ---------- to record ---------- */
+const openTodo = new Set();
+function renderTodo() {
+  const pending = ROWS.filter(r => r.status === 'given').sort((a, b) => (a.givenAt || a.date).localeCompare(b.givenAt || b.date));
+  const targetOf = r => VACCINES[r.vaccine]?.target || 'RAVS';
+  const targets = ['All', ...new Set(pending.map(targetOf))];
+  if (!targets.includes(todoFilter)) todoFilter = 'All';
+  $('#todoFilter').innerHTML = targets.length > 2 ? targets.map(t => `<button type="button" class="chip small" data-todofilter="${esc(t)}" aria-pressed="${t === todoFilter}">${esc(t)} ${t === 'All' ? pending.length : pending.filter(r => targetOf(r) === t).length}</button>`).join('') : '';
+  const late = pending.filter(r => r.date < todayIso()).length;
+  setCount('#cTodo', pending.length).classList.toggle('hot', late > 0);
+  const list = pending.filter(r => todoFilter === 'All' || targetOf(r) === todoFilter);
+  const groups = visits(list);
+  $('#todoList').innerHTML = groups.length ? groups.map(todoCard).join('') : '<div class="panel empty">Everything given has been recorded.</div>';
+  const ravsPending = pending.filter(r => targetOf(r) === 'RAVS');
+  $('#fillAll').hidden = !EXT.ready || !ravsPending.length; $('#fillAll').textContent = `Fill all in RAVS (${ravsPending.length})`;
+  $('#extNote').hidden = !EXT.ready; $('#extNote').textContent = `RAVS Helper is connected. It fills each RAVS page, you check the summary and press Confirm and save, and it's marked here automatically.`;
+}
+function todoCard(v) {
+  const r = v[0], open = openTodo.has(r.visitId);
+  const age = daysBetween(r.date, todayIso()), left = 15 - age;
+  const tag = age === 0 ? '' : `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} late · ${left > 0 ? left + ' left to claim' : 'claim window passed'}</span>`;
+  const copyVal = (v, show, mono) => v ? `<button class="copy ${mono ? 'mono' : ''}" type="button" data-copy="${esc(v)}">${esc(show || v)}</button>` : '<span class="muted">–</span>';
+  const kv = (k, val) => `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${val}</span></div>`;
+  const pickVal = val => val ? `${esc(val)}<span class="pick">pick</span>` : '<span class="muted">–</span>';
+  const doseRow = d => {
+    const target = VACCINES[d.vaccine]?.target || 'RAVS';
+    return `<div class="dose" style="justify-content:space-between;gap:10px 16px"><span style="display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline"><span class="vx">${esc(d.vaccine)}</span><span class="det"><span><b>${esc(shortProduct(d.product))}</b></span><span class="mono">${esc(d.batch || 'no batch')}</span>${d.eligibility && d.eligibility !== 'Based on age' ? `<span>${esc(d.eligibility)}</span>` : ''}</span></span>
+      <span class="rvact"><button class="btn sm ghost" data-edit-todo="${esc(d.visitId)}">Edit</button>${EXT.ready && target === 'RAVS' ? `<button class="btn primary sm" data-fill="${esc(d.id)}">Fill in RAVS</button>` : ''}<button class="btn go sm" data-entered="${esc(d.id)}">Entered on ${esc(target)}</button></span></div>`;
+  };
+  const doseFields = d => {
+    const target = VACCINES[d.vaccine]?.target || 'RAVS';
+    const rows = target === 'RAVS'
+      ? [kv('Vaccination date', copyVal(ukDate(d.date), '', true)), kv('Vaccinator', copyVal(d.vaccinator)), kv('Vaccine', pickVal(`${VACCINES[d.vaccine]?.ravs || d.vaccine}: ${shortProduct(d.product)}`)), kv('Batch', copyVal(d.batch, '', true)), kv('Eligibility', pickVal(d.eligibility)), kv('Consent', pickVal(d.consent)), kv('Site', pickVal(d.site))]
+      : [kv('Date', copyVal(ukDate(d.date), '', true)), kv('Product', copyVal(d.product)), kv('Batch', copyVal(d.batch, '', true)), kv('Vaccinator', copyVal(d.vaccinator)), kv('Phone', copyVal(d.phone, '', true))];
+    return `<div><h4>${esc(d.vaccine)} · ${esc(target)}</h4>${rows.join('')}${d.eligNote ? `<div class="note" style="margin-top:8px">Note: ${esc(d.eligNote)}</div>` : ''}</div>`;
+  };
+  const patient = `<div><h4>Patient</h4>${kv('NHS number', copyVal(r.nhs, fmtNhs(r.nhs), true))}${kv('First name', copyVal(r.given))}${kv('Last name', copyVal(r.surname))}${kv('Date of birth', copyVal(ukDate(r.dob), '', true))}${kv('Postcode', copyVal(r.postcode, '', true))}</div>`;
+  return `<div class="rv"><div class="rvh"><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="meta"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}<span>Given ${esc(age === 0 ? 'today ' + (r.givenAt || '').slice(11) : ukDate(r.date))}</span>${r.location !== 'Pharmacy' ? `<span>${esc(r.location)}</span>` : ''}${tag}</div></div>
+    <button class="toggle" type="button" data-toggle-todo="${esc(r.visitId)}" aria-expanded="${open}">${open ? 'Hide fields' : 'Show RAVS fields'}</button></div>
+    <div style="padding:0 20px 16px;display:grid;gap:10px">${v.map(doseRow).join('')}</div>
+    ${open ? `<div class="rvbody"><div class="cols">${patient}${v.map(doseFields).join('')}</div></div>` : ''}</div>`;
+}
+
+/* ---------- records ---------- */
+function renderRecords() {
+  const t = todayIso(); const d = DAYS.find(x => x.date === t) || { given: 0, entered: 0, waiting: 0, booked: 0, byVax: {} };
+  const outstanding = ROWS.filter(r => r.status === 'given').length;
+  const late = ROWS.filter(r => r.status === 'given' && r.date < t).length;
+  const season = DAYS.reduce((a, x) => a + x.given, 0);
+  $('#tiles').innerHTML = [
+    ['Given today', d.given, ''], ['Still to record', outstanding, outstanding ? 'warn' : 'ok'], ['From earlier days', late, late ? 'bad' : 'ok'], ['Season total', season, ''],
+  ].map(([k, n, c]) => `<div class="tile ${c}"><div class="k">${k}</div><div class="n">${n}</div></div>`).join('');
+  const vaxCols = ['Flu', 'COVID-19', 'Nasal flu', 'MMR', 'MenB', 'Pneumococcal', 'Private flu', 'Private COVID'].filter(v => DAYS.some(x => x.byVax[v]));
+  const max = Math.max(1, ...DAYS.map(x => x.given));
+  $('#dayTable').innerHTML = `<thead><tr><th>Date</th>${vaxCols.map(v => `<th class="n">${esc(VACCINES[v].short)}</th>`).join('')}<th class="n">Given</th><th class="n">On record</th><th class="n">Missing</th><th style="width:30%"></th></tr></thead><tbody>` +
+    (DAYS.length ? DAYS.map(x => { const miss = x.given - x.entered; return `<tr><td class="mono">${esc(ukDate(x.date))}</td>${vaxCols.map(v => `<td class="n">${x.byVax[v] || ''}</td>`).join('')}<td class="n">${x.given}</td><td class="n">${x.entered}</td><td class="n">${miss ? `<span class="pill p-late">${miss}</span>` : ''}</td><td><div class="bar" style="width:${(x.given / max * 100).toFixed(1)}%"></div></td></tr>`; }).join('') : `<tr><td colspan="${vaxCols.length + 5}" class="muted">No vaccinations yet this season.</td></tr>`) + '</tbody>';
+}
+let searchTimer;
+function onSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    const q = $('#searchBox').value; const hits = await API.search(q, S.seasonStart);
+    $('#searchList').innerHTML = q.trim().length < 2 ? '<div class="empty">Type at least two characters.</div>' : hits.length ? hits.map(r => `<div class="row"><div class="time">${esc(ukDate(r.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span><span class="mono">${esc(fmtNhs(r.nhs))}</span><span>${esc(shortProduct(r.product))}</span><span class="mono">${esc(r.batch)}</span><span>${esc(r.vaccinator)}</span></div></div><div class="right"><span class="pill p-neutral">${esc(r.vaccine)}</span>${statusPill(r.status)}</div></div>`).join('') : '<div class="empty">No matches this season.</div>';
+  }, 300);
+}
+async function exportCsv() {
+  openModal(`<h2>Export records</h2><div class="editgrid"><div class="f"><label for="exFrom">From</label><input type="date" id="exFrom" value="${esc(S.seasonStart)}"></div><div class="f"><label for="exTo">To</label><input type="date" id="exTo" value="${todayIso()}"></div></div>
+    <div class="actions"><button class="btn primary" id="exGo">Make CSV</button><button class="btn ghost" data-close>Close</button></div><div id="exOut"></div>`);
+  $('#exGo').onclick = async () => {
+    const rows = await API.exportRows($('#exFrom').value, $('#exTo').value);
+    const cols = ['date', 'time', 'source', 'location', 'surname', 'given', 'dob', 'nhs', 'postcode', 'address', 'gp', 'phone', 'vaccine', 'product', 'batch', 'eligibility', 'eligNote', 'consent', 'site', 'vaccinator', 'deskBy', 'status', 'givenAt', 'enteredAt', 'enteredBy', 'note'];
+    const csv = [cols.join(',')].concat(rows.map(r => cols.map(c => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(','))).join('\n');
+    const name = `vaccinations_${$('#exFrom').value}_to_${$('#exTo').value}.csv`;
+    try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); } catch (e) {}
+    $('#exOut').innerHTML = `<p class="small muted">${rows.length} rows. If the download didn't start, copy the text below into a spreadsheet.</p><textarea readonly>${esc(csv)}</textarea>`;
+  };
+}
+
+/* ---------- settings ---------- */
+function renderSettings() {
+  const opt = (list, cur) => list.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
+  $('#sVaccinator').innerHTML = '<option value=""></option>' + opt(S.vaccinators || [], S.vaccinator);
+  $('#sSite').innerHTML = opt(SITES, S.site); $('#sConsent').innerHTML = opt(CONSENTS, S.consent);
+  $('#sVaccinators').value = (S.vaccinators || []).join('\n'); $('#sStaff').value = (S.staff || []).join('\n'); $('#sLocations').value = (S.locations || []).join('\n');
+  $('#sFluAge').value = S.fluAge; $('#sFluDate').value = S.fluDate; $('#sCovAge').value = S.covAge; $('#sCovDate').value = S.covDate; $('#sSeason').value = S.seasonStart; $('#sNasalFrom').value = S.nasalFrom; $('#sNasalTo').value = S.nasalTo;
+  renderProdTable();
+}
+function renderProdTable() {
+  $('#prodTable').innerHTML = `<thead><tr><th>Vaccine</th><th>Product (as RAVS names it)</th><th>Batch</th><th>Expiry</th><th>In use</th></tr></thead><tbody>` +
+    (S.products || []).map((p, i) => `<tr data-prod="${i}"><td><select data-pk="vaccine">${Object.keys(VACCINES).map(v => `<option ${v === p.vaccine ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></td>
+      <td><input data-pk="product" value="${esc(p.product)}" style="min-width:260px"></td><td><input class="mono" data-pk="batch" value="${esc(p.batch)}" style="width:130px"></td>
+      <td><input type="date" data-pk="expiry" value="${esc(p.expiry)}"></td><td><input type="checkbox" data-pk="active" ${p.active ? 'checked' : ''} aria-label="In use"></td></tr>`).join('') + '</tbody>';
+  $$('#prodTable input:not([type=checkbox]), #prodTable select').forEach(el => { el.style.padding = '6px 8px'; el.style.border = '1px solid var(--line)'; el.style.borderRadius = '6px'; el.style.background = 'var(--surface)'; });
+}
+function readProducts() {
+  return $$('#prodTable tr[data-prod]').map(tr => ({ vaccine: $('[data-pk=vaccine]', tr).value, product: $('[data-pk=product]', tr).value.trim(), batch: $('[data-pk=batch]', tr).value.trim().toUpperCase(), expiry: $('[data-pk=expiry]', tr).value, active: $('[data-pk=active]', tr).checked })).filter(p => p.product);
+}
+async function saveSettings(ev) {
+  ev.preventDefault();
+  const lines = id => $(id).value.split('\n').map(s => s.trim()).filter(Boolean);
+  const s = Object.assign({}, S, { products: readProducts(), vaccinators: lines('#sVaccinators'), staff: lines('#sStaff'), locations: lines('#sLocations'),
+    vaccinator: $('#sVaccinator').value, site: $('#sSite').value, consent: $('#sConsent').value,
+    fluAge: +$('#sFluAge').value, fluDate: $('#sFluDate').value, covAge: +$('#sCovAge').value, covDate: $('#sCovDate').value, seasonStart: $('#sSeason').value, nasalFrom: $('#sNasalFrom').value, nasalTo: $('#sNasalTo').value });
+  if (!s.vaccinators.includes(s.vaccinator)) s.vaccinator = s.vaccinators[0] || '';
+  await API.saveSettings(s); toast('Settings saved'); await refresh(true);
+}
+
+/* ---------- modal ---------- */
+function openModal(html) { $('#modalHost').innerHTML = `<div class="scrim" data-scrim><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`; }
+function closeModal() { $('#modalHost').innerHTML = ''; }
+function openPaste() {
+  openModal(`<h2>Paste today's bookings</h2>
+    <p class="small muted">In Manage your appointments, open the day view for today, select the whole appointments table (from the first time to the last row), copy, and paste it here. Nothing is read from the website directly.</p>
+    <div class="editgrid"><div class="f"><label for="pDate">Appointments are for</label><input type="date" id="pDate" value="${todayIso()}"></div></div>
+    <textarea id="pText" placeholder="09:06	SURNAME FIRSTNAME 1234567890	18 May 1957	07…	Flu 65+	Cancel"></textarea>
+    <div id="pPrev"></div>
+    <div class="actions"><button class="btn primary" id="pImport" disabled>Add bookings</button><button class="btn ghost" data-close>Cancel</button></div>`);
+  const prev = () => {
+    const list = parseBookings($('#pText').value, $('#pDate').value);
+    $('#pImport').disabled = !list.length;
+    $('#pPrev').innerHTML = list.length ? `<p class="small"><b>${list.length} appointments found.</b> Check a few before adding.</p><div class="tablewrap" style="max-height:240px"><table><thead><tr><th>Time</th><th>Name</th><th>NHS number</th><th>DOB</th><th>Vaccines</th></tr></thead><tbody>${list.map(b => `<tr><td class="mono">${esc(b.time)}</td><td>${esc(b.surname)}, ${esc(b.given)}</td><td class="mono">${esc(fmtNhs(b.nhs))}</td><td class="mono">${esc(ukDate(b.dob))}</td><td>${esc(b.vaccines.join(' + '))}</td></tr>`).join('')}</tbody></table></div>` : ($('#pText').value.trim() ? '<div class="alert warn">No appointments recognised yet. Make sure the copy includes the time, name, NHS number and date of birth columns.</div>' : '');
+    return list;
+  };
+  $('#pText').addEventListener('input', prev); $('#pDate').addEventListener('change', prev);
+  $('#pImport').onclick = async () => {
+    const list = prev(); const now = new Date().toISOString();
+    const rows = []; list.forEach(b => { const visitId = uid(); b.vaccines.forEach(v => rows.push({ id: uid(), visitId, date: b.date, time: b.time, source: 'Booked', nhs: b.nhs, surname: b.surname, given: b.given, dob: b.dob, postcode: '', phone: '', vaccine: v, product: defaultProduct(v, b.dob, S), batch: '', eligibility: '', eligNote: '', consent: S.consent, site: S.site, vaccinator: '', deskBy: me, location: 'Pharmacy', status: 'booked', givenAt: '', enteredAt: '', enteredBy: '', note: b.service, updatedAt: now })); });
+    const res = await API.importBookings(rows); closeModal(); toast(`${res.added} bookings added${list.length - res.added ? `, ${list.length - res.added} were already in` : ''}`); await refresh(true);
+  };
+}
+function openNotGiven(visitId) {
+  openModal(`<h2>Not given</h2><div class="f"><label for="ngWhy">Reason</label><select id="ngWhy"><option>Patient declined</option><option>Unwell today</option><option>Not eligible</option><option>Had it elsewhere</option><option>Left before vaccination</option><option>Other</option></select></div>
+    <div class="f"><label for="ngNote">Detail (optional)</label><input id="ngNote"></div><div class="actions"><button class="btn primary" id="ngGo">Save</button><button class="btn ghost" data-close>Cancel</button></div>`);
+  $('#ngGo').onclick = async () => { const ids = ROWS.filter(r => r.visitId === visitId && r.status === 'waiting').map(r => r.id); await API.update(ids, { status: 'notgiven', note: [$('#ngWhy').value, $('#ngNote').value].filter(Boolean).join(': ') }); closeModal(); toast('Marked as not given'); await refresh(true); };
+}
+
+/* ===================== events ===================== */
+function showTab(name) {
+  if (!$('#tab-' + name)) name = 'desk';
+  $$('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
+  $$('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + name));
+  store.set('psm.tab', name);
+}
+document.addEventListener('click', async ev => {
+  const b = ev.target.closest('button, [data-scrim]'); if (!b) return;
+  const d = b.dataset;
+  if (b.matches('[data-scrim]') && ev.target === b) return closeModal();
+  if (d.tab) return showTab(d.tab);
+  if (d.goto) return showTab(d.goto);
+  if (d.vax) { const v = d.vax; form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines, v]; return renderDeskForm(); }
+  if ('morevax' in d) { showMoreVax = true; return renderDeskForm(); }
+  if (d.toggleTodo) { openTodo.has(d.toggleTodo) ? openTodo.delete(d.toggleTodo) : openTodo.add(d.toggleTodo); return renderTodo(); }
+  if (d.checkin) return checkInBooking(d.checkin);
+  if (d.give) return giveVisit(d.give);
+  if (d.notgiven) return openNotGiven(d.notgiven);
+  if (d.edit) { editing = d.edit; return renderVax(); }
+  if (d.editTodo) { editing = d.editTodo; showTab('desk'); renderVax(); return $(`[data-dose]`)?.scrollIntoView({ block: 'center' }); }
+  if ('cancelEdit' in d) { editing = null; return renderVax(); }
+  if (d.saveEdit) {
+    const changes = $$(`[data-dose]`).map(el => { const patch = {}; $$('[data-k]', el).forEach(i => patch[i.dataset.k] = i.value); if (patch.status === 'given' && !patch.batch) patch.batch = batchFor(patch.product, S); return { id: el.dataset.dose, patch }; });
+    await API.updateEach(changes); editing = null; toast('Changes saved'); return refresh(true);
+  }
+  if (d.undo) { await API.update(ROWS.filter(r => r.visitId === d.undo && r.status === 'given').map(r => r.id), { status: 'waiting', givenAt: '' }); return refresh(true); }
+  if (d.copy !== undefined) return copyText(d.copy, b);
+  if (d.entered) { await API.update([d.entered], { status: 'entered', enteredAt: `${todayIso()} ${nowTime()}`, enteredBy: me }); toast('Marked as recorded'); return refresh(true); }
+  if (d.fill) return sendToRavs(ROWS.filter(r => r.id === d.fill));
+  if (b.id === 'fillAll') return sendToRavs(ROWS.filter(r => r.status === 'given' && (VACCINES[r.vaccine]?.target || 'RAVS') === 'RAVS').sort((a, b) => (a.givenAt || a.date).localeCompare(b.givenAt || b.date) || a.visitId.localeCompare(b.visitId)));
+  if (d.todofilter) { todoFilter = d.todofilter; return renderTodo(); }
+  if ('close' in d) return closeModal();
+  if (b.id === 'pasteBtn') return openPaste();
+  if (b.id === 'clearForm') return clearForm();
+  if (b.id === 'exportBtn') return exportCsv();
+  if (b.id === 'addProd') { S.products = readProducts().concat([{ vaccine: 'Flu', product: '', batch: '', expiry: '', active: true }]); renderProdTable(); }
+});
+document.addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.dataset.eligReason) { (form.elig[t.dataset.eligReason] ||= {}).reason = t.value; }
+  if (t.id === 'meSel') { me = t.value; store.set('psm.me', me); }
+  if (t.id === 'fLocation') { store.set('psm.loc', t.value); renderExtraSum(); }
+});
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if (t.dataset.eligNote) { (form.elig[t.dataset.eligNote] ||= {}).note = t.value; }
+  if (t.id === 'fNhs') { onNhsInput(); checkDuplicates(); }
+  if (t.id === 'fDob') { onDobInput(); checkDuplicates(); }
+  if (t.id === 'fSurname') checkDuplicates();
+  if (t.id === 'searchBox') onSearch();
+  if (t.id === 'fPhone' || t.id === 'fNote') renderExtraSum();
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeModal(); });
+$('#fNhs').addEventListener('blur', () => { const n = cleanNhs($('#fNhs').value); if (n.length === 10) $('#fNhs').value = fmtNhs(n); });
+$('#fDob').addEventListener('blur', () => { const d = parseDob($('#fDob').value); if (d) $('#fDob').value = ukDate(d); });
+$('#fPostcode').addEventListener('blur', () => { $('#fPostcode').value = fmtPostcode($('#fPostcode').value); });
+$('#deskForm').addEventListener('submit', submitDesk);
+$('#setForm').addEventListener('submit', saveSettings);
+
+/* ===================== RAVS Helper link ===================== */
+const EXT = { ready: false };
+function ravsJob(r) {
+  return { id: r.id, visitId: r.visitId, nhs: r.nhs, given: r.given, surname: r.surname, dob: r.dob, postcode: r.postcode, date: r.date,
+    vaccine: r.vaccine, ravsVaccine: VACCINES[r.vaccine]?.ravs || r.vaccine, product: r.product, batch: r.batch, vaccinator: r.vaccinator,
+    eligibility: r.eligibility, consent: r.consent, site: r.site };
+}
+function sendToRavs(rows) {
+  const bad = rows.filter(r => !r.batch || !r.vaccinator || !r.eligibility);
+  if (bad.length) toast(`${bad.length} need a batch, vaccinator or reason first. Use Edit.`);
+  const ok = rows.filter(r => !bad.includes(r));
+  if (!ok.length) return;
+  window.postMessage({ psm: 'app-queue', jobs: ok.map(ravsJob) }, '*');
+}
+window.addEventListener('message', async ev => {
+  if (ev.source !== window || !ev.data) return;
+  const d = ev.data;
+  if (d.psm === 'ext-ready') { if (!EXT.ready) { EXT.ready = true; renderTodo(); } }
+  if (d.psm === 'ext-queued') toast(`${d.added} sent to RAVS Helper (${d.total} in its queue)`);
+  if (d.psm === 'ext-done' && Array.isArray(d.results) && d.results.length) {
+    const changes = d.results.map(x => {
+      const patch = { status: 'entered', enteredAt: x.at ? `${isoDate(new Date(x.at))} ${pad(new Date(x.at).getHours())}:${pad(new Date(x.at).getMinutes())}` : `${todayIso()} ${nowTime()}`, enteredBy: 'RAVS Helper' + (me ? ' (' + me + ')' : '') };
+      if (x.address) patch.address = x.address; if (x.gp) patch.gp = x.gp;
+      const row = ROWS.find(r => r.id === x.id); if (x.nhs && row && !row.nhs) patch.nhs = x.nhs;
+      return { id: x.id, patch };
+    });
+    try { await API.updateEach(changes); window.postMessage({ psm: 'app-ack', ids: d.results.map(x => x.id) }, '*'); toast(`${changes.length} marked as recorded on RAVS`); refresh(true); } catch (e) { console.warn(e); }
+  }
+});
+
+/* ===================== boot ===================== */
+$('#demoBanner').hidden = hasGas;
+showTab(store.get('psm.tab', 'desk'));
+refresh(true);
+window.postMessage({ psm: 'app-hello' }, '*');
+setInterval(() => { if (!editing && document.visibilityState === 'visible') refresh(false); }, hasGas ? 12000 : 4000);
+</script>
