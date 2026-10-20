@@ -3,6 +3,20 @@ const RAVS_URLS = ['https://ravs.england.nhs.uk/*', 'https://www.ravs.england.nh
 const START = 'https://ravs.england.nhs.uk/record-vaccinations';
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  // For the RAVS button in the app: closed, reload (helper not running in the tab), login or ready.
+  if (msg && msg.type === 'ravs-status') {
+    chrome.tabs.query({ url: RAVS_URLS }).then(async tabs => {
+      if (!tabs.length) return reply({ state: 'closed' });
+      let state = 'reload';
+      for (const t of tabs) {
+        const r = await chrome.tabs.sendMessage(t.id, { type: 'ping' }).catch(() => null);
+        if (r && r.login) state = state === 'ready' ? state : 'login';
+        else if (r) state = 'ready';
+      }
+      reply({ state });
+    });
+    return true;
+  }
   if (msg && msg.type === 'open-ravs') {
     chrome.tabs.query({ url: RAVS_URLS }).then(tabs => {
       if (tabs.length) {
