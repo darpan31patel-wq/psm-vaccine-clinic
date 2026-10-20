@@ -20,7 +20,12 @@
 
   window.addEventListener('message', ev => {
     if (ev.source !== window || !ev.data || !isApp()) return;
-    const d = ev.data;
+    try { handle(ev.data); } catch (e) {
+      // After the helper is updated or reloaded, this copy can no longer reach it until the page is reloaded.
+      window.postMessage({ psm: 'ext-error', message: String(e && e.message || e) }, '*');
+    }
+  });
+  function handle(d) {
     if (d.psm === 'app-hello') { announce(); sendDone(); sendLookups(); }
     // A patient search: goes ahead of waiting vaccinations, but never interrupts one already being filled.
     if (d.psm === 'app-lookup' && d.job && d.job.id) {
@@ -37,6 +42,7 @@
       });
     }
     if (d.psm === 'app-show-ravs') chrome.runtime.sendMessage({ type: 'open-ravs', focus: true });
+    if (d.psm === 'app-side-by-side') chrome.runtime.sendMessage({ type: 'side-by-side', screen: d.screen }, res => { if (res && !res.ok) window.postMessage({ psm: 'ext-side-by-side-failed', message: res.error }, '*'); });
     if (d.psm === 'app-ravs-status') chrome.runtime.sendMessage({ type: 'ravs-status' }, res => window.postMessage({ psm: 'ext-ravs-status', state: (res && res.state) || 'closed' }, '*'));
     if (d.psm === 'app-lookup-cancel' && d.id) {
       chrome.storage.local.get({ queue: [], current: null }, ({ queue, current }) => {
@@ -63,7 +69,7 @@
         chrome.storage.local.set({ done: done.filter(x => !d.ids.includes(x.id)) });
       });
     }
-  });
+  }
   chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); if (area === 'local' && ch.lookups) sendLookups();
     const ls = area === 'local' && ch.lookupStatus && ch.lookupStatus.newValue;
     if (ls && isApp()) window.postMessage({ psm: 'ext-lookup-status', id: ls.id, text: ls.text }, '*');
