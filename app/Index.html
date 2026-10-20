@@ -327,7 +327,8 @@ details.extra .fields { margin-top: 14px; }
 /* stats */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
-.tile.priv { border-left-color: var(--priv); }
+.tile.priv { border-left-color: var(--priv); } .tile.flu { border-left-color: var(--flu); } .tile.covid { border-left-color: var(--covid); }
+.tilehead { grid-column: 1 / -1; margin: 6px 0 -4px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .tile.warn { border-left-color: var(--warn); } .tile.bad { border-left-color: var(--bad); } .tile.ok { border-left-color: var(--ok); }
 .tile .k { font-size: 14px; color: var(--muted); }
 .tile .n { font-size: 32px; font-weight: 700; font-family: var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 4px; }
@@ -466,7 +467,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 
 <!-- RECORDS -->
 <section class="tab" id="tab-records">
-  <div class="pagehead"><h2>Records</h2><span class="sp"></span><button class="btn sm" id="exportBtn" type="button">Export CSV</button></div>
+  <div class="pagehead"><h2>Records</h2><span class="sp"></span><button class="btn primary" id="exportBtn" type="button">Export to Excel</button></div>
   <div class="tiles" id="tiles"></div>
   <div class="grid2" style="grid-template-columns: minmax(0,1.2fr) minmax(0,1fr)">
     <div class="panel">
@@ -1344,17 +1345,27 @@ function todoCard(v) {
 
 /* ---------- records ---------- */
 function renderRecords() {
-  const t = todayIso(); const d = DAYS.find(x => x.date === t) || { given: 0, entered: 0, waiting: 0, booked: 0, byVax: {} };
+  // DAYS counts private doses as given and recorded; NHS numbers leave them out.
+  const t = todayIso(), blank = { given: 0, entered: 0, waiting: 0, booked: 0, notgiven: 0, byVax: {} };
+  const split = x => { const pf = x.byVax['Private flu'] || 0, pc = x.byVax['Private COVID'] || 0, nhs = x.given - pf - pc;
+    return { nhs, onRavs: x.entered - pf - pc, flu: x.byVax['Flu'] || 0, covid: x.byVax['COVID-19'] || 0, pf, pc, takings: pf * priceOf('Private flu') + pc * priceOf('Private COVID') }; };
+  const d = split(DAYS.find(x => x.date === t) || blank);
+  const all = DAYS.reduce((a, x) => { const y = split(x); Object.keys(y).forEach(k => a[k] = (a[k] || 0) + y[k]); return a; }, {});
   const outstanding = ROWS.filter(r => r.status === 'given').length;
   const late = ROWS.filter(r => r.status === 'given' && r.date < t).length;
-  const season = DAYS.reduce((a, x) => a + x.given, 0);
-  $('#tiles').innerHTML = [
-    ['Given today', d.given, ''], ['Still to record', outstanding, outstanding ? 'warn' : 'ok'], ['From earlier days', late, late ? 'bad' : 'ok'], ['Season total', season, ''],
-  ].map(([k, n, c]) => `<div class="tile ${c}"><div class="k">${k}</div><div class="n">${n}</div></div>`).join('');
+  const patients = new Set(ROWS.filter(r => r.date === t && !['booked', 'checkedin'].includes(r.status)).map(r => r.visitId)).size;
+  const tile = ([k, n, c]) => `<div class="tile ${c}"><div class="k">${k}</div><div class="n">${n}</div></div>`;
+  $('#tiles').innerHTML = `<h3 class="tilehead">Today</h3>` + [
+    ['Patients registered', patients, ''], ['NHS flu', d.flu, 'flu'], ['NHS COVID', d.covid, 'covid'], ['Entered on RAVS', d.onRavs, 'ok'], ['Still to record', outstanding, outstanding ? 'warn' : 'ok'],
+    ['Private', d.pf + d.pc, 'priv'], ['Private taken', money(d.takings), 'priv'],
+  ].map(tile).join('') + `<h3 class="tilehead">This season</h3>` + [
+    ['NHS vaccinations', all.nhs || 0, ''], ['NHS flu', all.flu || 0, 'flu'], ['NHS COVID', all.covid || 0, 'covid'], ['From earlier days, not on RAVS', late, late ? 'bad' : 'ok'],
+    ['Private', (all.pf || 0) + (all.pc || 0), 'priv'], ['Private taken', money(all.takings || 0), 'priv'],
+  ].map(tile).join('');
   const vaxCols = ['Flu', 'COVID-19', 'Nasal flu', 'MMR', 'MenB', 'Pneumococcal', 'Private flu', 'Private COVID'].filter(v => DAYS.some(x => x.byVax[v]));
-  const max = Math.max(1, ...DAYS.map(x => x.given));
-  $('#dayTable').innerHTML = `<thead><tr><th>Date</th>${vaxCols.map(v => `<th class="n">${esc(VACCINES[v].short)}</th>`).join('')}<th class="n">Given</th><th class="n">On record</th><th class="n">Missing</th><th style="width:30%"></th></tr></thead><tbody>` +
-    (DAYS.length ? DAYS.map(x => { const miss = x.given - x.entered; return `<tr><td class="mono">${esc(ukDate(x.date))}</td>${vaxCols.map(v => `<td class="n">${x.byVax[v] || ''}</td>`).join('')}<td class="n">${x.given}</td><td class="n">${x.entered}</td><td class="n">${miss ? `<span class="pill p-late">${miss}</span>` : ''}</td><td><div class="bar" style="width:${(x.given / max * 100).toFixed(1)}%"></div></td></tr>`; }).join('') : `<tr><td colspan="${vaxCols.length + 5}" class="muted">No vaccinations yet this season.</td></tr>`) + '</tbody>';
+  const max = Math.max(1, ...DAYS.map(x => split(x).nhs));
+  $('#dayTable').innerHTML = `<thead><tr><th>Date</th>${vaxCols.map(v => `<th class="n">${esc(VACCINES[v].short)}</th>`).join('')}<th class="n">NHS given</th><th class="n">On RAVS</th><th class="n">Missing</th><th style="width:24%"></th></tr></thead><tbody>` +
+    (DAYS.length ? DAYS.map(x => { const y = split(x), miss = y.nhs - y.onRavs; return `<tr><td class="mono">${esc(ukDate(x.date))}</td>${vaxCols.map(v => `<td class="n">${x.byVax[v] || ''}</td>`).join('')}<td class="n">${y.nhs}</td><td class="n">${y.onRavs}</td><td class="n" ${miss ? 'style="color:var(--warn);font-weight:700"' : ''}>${miss || ''}</td><td><div class="bar" style="width:${Math.round(y.nhs / max * 100)}%"></div></td></tr>`; }).join('') : '<tr><td colspan="9" class="empty">Nothing yet.</td></tr>') + '</tbody>';
 }
 let searchTimer;
 function onSearch() {
@@ -1364,16 +1375,115 @@ function onSearch() {
     $('#searchList').innerHTML = q.trim().length < 2 ? '<div class="empty">Type at least two characters.</div>' : hits.length ? hits.map(r => `<div class="row"><div class="time">${esc(ukDate(r.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span><span class="mono">${esc(fmtNhs(r.nhs))}</span><span>${esc(shortProduct(r.product))}</span><span class="mono">${esc(r.batch)}</span><span>${esc(r.vaccinator)}</span></div></div><div class="right"><span class="pill p-neutral">${esc(r.vaccine)}</span>${statusPill(r.status)}</div></div>`).join('') : '<div class="empty">No matches this season.</div>';
   }, 300);
 }
-async function exportCsv() {
-  openModal(`<h2>Export records</h2><div class="editgrid"><div class="f"><label for="exFrom">From</label><input type="date" id="exFrom" value="${esc(S.seasonStart)}"></div><div class="f"><label for="exTo">To</label><input type="date" id="exTo" value="${todayIso()}"></div></div>
-    <div class="actions"><button type="button" class="btn primary" id="exGo">Make CSV</button><button type="button" class="btn ghost" data-close>Close</button></div><div id="exOut"></div>`);
+/* ---------- Excel export ---------- */
+// One Summary tab with the numbers, one tab per clinic day (NHS), and one Private tab split by date.
+const EXPORT_COLS = [
+  ['Time', r => (r.givenAt || '').slice(11) || r.time, 8], ['Surname', r => r.surname, 16], ['First name', r => r.given, 14], ['Date of birth', r => ukDate(r.dob), 12],
+  ['Age', r => r.dob ? ageOn(r.dob, r.date) : '', 6], ['NHS number', r => r.nhs ? fmtNhs(r.nhs) : '', 14], ['Postcode', r => r.postcode, 10], ['Address', r => r.address, 36],
+  ['GP', r => r.gp, 28], ['Phone', r => r.phone, 14], ['Vaccine', r => r.vaccine, 14], ['Product', r => r.product, 34], ['Batch', r => r.batch, 12],
+  ['Eligibility', r => r.eligibility, 22], ['Detail', r => r.eligNote, 18], ['Consent', r => r.consent, 12], ['Injection site', r => r.site, 15],
+  ['Vaccinator', r => r.vaccinator, 16], ['Desk', r => r.deskBy, 12], ['Location', r => r.location, 12], ['Booked or walk-in', r => r.source, 12],
+  ['Status', r => isPriv(r) ? 'Private' : STATUS_LABEL[r.status] || r.status, 11], ['On RAVS at', r => isPriv(r) ? '' : (r.enteredAt || '').slice(11), 10], ['Entered by', r => isPriv(r) ? '' : r.enteredBy, 16],
+  ['Price', r => isPriv(r) ? priceOf(r.vaccine) : '', 8], ['Note', r => r.note, 24],
+];
+const XL_FILL = { flu: 'FFE3EDFA', covid: 'FFEFE7FA', priv: 'FFFBE6F0', other: 'FFE2F0EE', head: 'FF0A6464', day: 'FFF2F5F7', warn: 'FFFCF0DC' };
+function loadExcelJs() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  const urls = ['https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js', 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'];
+  return urls.reduce((p, u) => p.catch(() => new Promise((res, rej) => { const el = document.createElement('script'); el.src = u; el.onload = () => window.ExcelJS ? res(window.ExcelJS) : rej(); el.onerror = rej; document.head.appendChild(el); })), Promise.reject());
+}
+// Counts for one set of rows (one day, or the whole range). Patients are visits; vaccinations are doses.
+function dayNumbers(rows) {
+  const done = rows.filter(r => r.status === 'given' || r.status === 'entered');
+  const nhs = done.filter(r => !isPriv(r)), priv = done.filter(isPriv);
+  const n = v => done.filter(r => r.vaccine === v).length;
+  return {
+    patients: new Set(rows.filter(r => !['booked', 'checkedin'].includes(r.status)).map(r => r.visitId)).size,
+    booked: new Set(rows.filter(r => r.source === 'Booked' || r.status === 'booked').map(r => r.visitId)).size,
+    vaccinations: done.length, nhs: nhs.length, flu: n('Flu'), covid: n('COVID-19'), other: nhs.filter(r => !['Flu', 'COVID-19'].includes(r.vaccine)).length,
+    onRavs: nhs.filter(r => r.status === 'entered').length, toRecord: nhs.filter(r => r.status === 'given').length,
+    privFlu: n('Private flu'), privCovid: n('Private COVID'), takings: priv.reduce((a, r) => a + priceOf(r.vaccine), 0),
+    notGiven: rows.filter(r => r.status === 'notgiven').length, waiting: rows.filter(r => r.status === 'waiting').length,
+  };
+}
+const NUM_COLS = [['Patients registered', 'patients'], ['Booked', 'booked'], ['Vaccinations given', 'vaccinations'], ['NHS flu', 'flu'], ['NHS COVID', 'covid'], ['Other NHS', 'other'],
+  ['Entered on RAVS', 'onRavs'], ['Not yet on RAVS', 'toRecord'], ['Private flu', 'privFlu'], ['Private COVID', 'privCovid'], ['Private £', 'takings'], ['Not given', 'notGiven'], ['Waiting', 'waiting']];
+async function buildWorkbook(rows, from, to) {
+  const ExcelJS = await loadExcelJs();
+  const wb = new ExcelJS.Workbook(); wb.creator = 'PSM Vaccine Clinic';
+  const bold = { bold: true }, headFont = { bold: true, color: { argb: 'FFFFFFFF' } };
+  const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+  const kindFill = r => fill(XL_FILL[vaxKind(r.vaccine) || 'other']);
+  rows = rows.filter(r => r.status !== 'checkedin').sort((a, b) => (a.date + (a.givenAt || a.time)).localeCompare(b.date + (b.givenAt || b.time)));
+  const dates = [...new Set(rows.map(r => r.date))].sort();
+
+  // Summary: totals, then one row per day
+  const sum = wb.addWorksheet('Summary', { views: [{ state: 'frozen', ySplit: 6 }] });
+  sum.addRow([`PSM Pharmacy vaccinations, ${longDate(from)} to ${longDate(to)}`]).font = { bold: true, size: 14 };
+  sum.addRow([`Exported ${longDate(todayIso())} ${nowTime()}`]).font = { color: { argb: 'FF5D6E72' } };
+  sum.addRow([]);
+  const tot = dayNumbers(rows);
+  const tr = sum.addRow(['Whole range', ...NUM_COLS.map(([, k]) => tot[k])]); tr.font = bold; tr.fill = fill(XL_FILL.day);
+  sum.addRow([]);
+  const sh = sum.addRow(['Date', ...NUM_COLS.map(([h]) => h)]); sh.font = headFont; sh.fill = fill(XL_FILL.head);
+  dates.forEach(d => { const x = dayNumbers(rows.filter(r => r.date === d)); const row = sum.addRow([longDate(d), ...NUM_COLS.map(([, k]) => x[k])]); if (x.toRecord) row.getCell(1 + NUM_COLS.findIndex(c => c[1] === 'toRecord') + 1).fill = fill(XL_FILL.warn); });
+  sum.getColumn(1).width = 20; NUM_COLS.forEach((c, i) => { sum.getColumn(i + 2).width = Math.max(10, c[0].length + 2); });
+  sum.getColumn(1 + NUM_COLS.findIndex(c => c[1] === 'takings') + 1).numFmt = '"£"#,##0.00';
+
+  // One tab per day: NHS vaccinations
+  const headRow = ws => { const h = ws.addRow(EXPORT_COLS.map(c => c[0])); h.font = headFont; h.fill = fill(XL_FILL.head); EXPORT_COLS.forEach((c, i) => { ws.getColumn(i + 1).width = c[2]; }); };
+  const used = new Set();
+  dates.forEach(d => {
+    const dayRows = rows.filter(r => r.date === d && !isPriv(r));
+    if (!dayRows.length) return;
+    let name = new Date(d + 'T12:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: '2-digit' }).replace(/,/g, '');
+    while (used.has(name)) name += ' ';
+    used.add(name);
+    const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 3 }] });
+    const x = dayNumbers(rows.filter(r => r.date === d));
+    ws.addRow([longDate(d)]).font = { bold: true, size: 13 };
+    ws.addRow([`${x.patients} patients · ${x.flu} flu · ${x.covid} COVID${x.other ? ` · ${x.other} other` : ''} · ${x.onRavs} on RAVS · ${x.toRecord} not yet on RAVS${x.privFlu + x.privCovid ? ` · ${x.privFlu + x.privCovid} private (see Private tab)` : ''}`]);
+    headRow(ws);
+    dayRows.forEach(r => { const row = ws.addRow(EXPORT_COLS.map(c => c[1](r) ?? '')); row.getCell(11).fill = kindFill(r); if (r.status === 'given') row.getCell(22).fill = fill(XL_FILL.warn); });
+  });
+
+  // Private: one tab, a heading row per date
+  const priv = rows.filter(isPriv);
+  const pw = wb.addWorksheet('Private');
+  pw.addRow(['Private vaccinations (not recorded on RAVS)']).font = { bold: true, size: 13 };
+  const pt = dayNumbers(priv);
+  pw.addRow([`${pt.privFlu} private flu · ${pt.privCovid} private COVID · £${pt.takings.toFixed(2)} taken`]);
+  headRow(pw);
+  [...new Set(priv.map(r => r.date))].sort().forEach(d => {
+    const dr = priv.filter(r => r.date === d), x = dayNumbers(dr);
+    const h = pw.addRow([`${longDate(d)}: ${x.privFlu} flu, ${x.privCovid} COVID, £${x.takings.toFixed(2)}`]); h.font = bold; h.fill = fill(XL_FILL.priv);
+    dr.forEach(r => { const row = pw.addRow(EXPORT_COLS.map(c => c[1](r) ?? '')); row.getCell(11).fill = kindFill(r); });
+  });
+  pw.getColumn(EXPORT_COLS.findIndex(c => c[0] === 'Price') + 1).numFmt = '"£"#,##0.00';
+  return wb;
+}
+async function exportExcel() {
+  const season = S.seasonStart || todayIso();
+  openModal(`<h2>Export to Excel</h2>
+    <div class="vaxpick"><button type="button" class="chip small" data-exrange="season" aria-pressed="true">Whole season</button><button type="button" class="chip small" data-exrange="range" aria-pressed="false">Pick dates</button></div>
+    <div class="editgrid" id="exDates" hidden><div class="f"><label for="exFrom">From</label><input type="date" id="exFrom" value="${esc(season)}"></div><div class="f"><label for="exTo">To</label><input type="date" id="exTo" value="${todayIso()}"></div></div>
+    <p class="small muted" style="margin:0">You get a Summary tab with the numbers for each day, a tab for each clinic day, and a Private tab.</p>
+    <div class="actions"><button type="button" class="btn primary" id="exGo">Download Excel file</button><button type="button" class="btn ghost" data-close>Close</button></div><div id="exOut"></div>`);
+  $$('[data-exrange]').forEach(b => b.onclick = () => { $$('[data-exrange]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); $('#exDates').hidden = b.dataset.exrange !== 'range'; if (b.dataset.exrange === 'season') { $('#exFrom').value = season; $('#exTo').value = todayIso(); } });
   $('#exGo').onclick = async () => {
-    const rows = await API.exportRows($('#exFrom').value, $('#exTo').value);
-    const cols = ['date', 'time', 'source', 'location', 'surname', 'given', 'dob', 'nhs', 'postcode', 'address', 'gp', 'phone', 'vaccine', 'product', 'batch', 'eligibility', 'eligNote', 'consent', 'site', 'vaccinator', 'deskBy', 'status', 'givenAt', 'enteredAt', 'enteredBy', 'note'];
-    const csv = [cols.join(',')].concat(rows.map(r => cols.map(c => `"${String(r[c] ?? '').replace(/"/g, '""')}"`).join(','))).join('\n');
-    const name = `vaccinations_${$('#exFrom').value}_to_${$('#exTo').value}.csv`;
-    try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); } catch (e) {}
-    $('#exOut').innerHTML = `<p class="small muted">${rows.length} rows. If the download didn't start, copy the text below into a spreadsheet.</p><textarea readonly>${esc(csv)}</textarea>`;
+    const from = $('#exFrom').value || season, to = $('#exTo').value || todayIso();
+    $('#exGo').disabled = true; $('#exOut').innerHTML = '<p class="small muted">Making the file…</p>';
+    try {
+      const rows = await API.exportRows(from, to);
+      const wb = await buildWorkbook(rows, from, to);
+      const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob), name = `PSM vaccinations ${ukDate(from).replace(/\//g, '-')} to ${ukDate(to).replace(/\//g, '-')}.xlsx`;
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      $('#exOut').innerHTML = `<p class="small">${rows.filter(r => r.status !== 'checkedin').length} rows. If it didn't download, <a href="${url}" download="${esc(name)}" target="_blank" rel="noopener">click here to save the file</a>.</p>`;
+    } catch (e) {
+      console.warn(e);
+      $('#exOut').innerHTML = `<div class="alert bad">Couldn't make the Excel file (${esc(e && e.message || 'the Excel tool did not load')}). Check the internet connection and try again.</div>`;
+    } finally { $('#exGo').disabled = false; }
   };
 }
 
@@ -1509,7 +1619,7 @@ document.addEventListener('click', async ev => {
   if ('close' in d) return closeModal();
   if (b.id === 'pasteBtn') return openPaste();
   if (b.id === 'clearForm') return clearForm();
-  if (b.id === 'exportBtn') return exportCsv();
+  if (b.id === 'exportBtn') return exportExcel();
   if (b.id === 'addProd') { S.products = readProducts().concat([{ vaccine: 'Flu', product: '', batch: '', expiry: '', active: true }]); renderProdTable(); }
 });
 document.addEventListener('change', ev => {
@@ -1550,7 +1660,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '20 Oct 2026, 9';
+const BUILD = '20 Oct 2026, 10';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
