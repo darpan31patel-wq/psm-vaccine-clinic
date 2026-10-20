@@ -75,7 +75,9 @@ nav.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset
 .topright { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding-block: 8px; }
 .topright select { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; max-width: 160px; }
 .sync { display: inline-flex; align-items: center; gap: 6px; }
-@media (max-width: 1500px) { #syncText { display: none; } }
+@media (max-width: 1500px) { #syncText { display: none; } .sync.bad #syncText { display: inline; } }
+.sync.bad { color: var(--bad); font-weight: 700; }
+button:disabled.go { opacity: .45; cursor: not-allowed; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
 .dot.off { background: var(--bad); }
 .dot.wait { background: var(--warn); } .dot.idle { background: var(--faint); }
@@ -372,6 +374,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 @media (prefers-reduced-motion: no-preference) { .card, .rv, .chip, .btn, .copy { transition: border-color .15s, background-color .15s; } }
 </style>
 
+<div id="appError" class="demo-banner" hidden style="background:var(--bad-soft);color:var(--bad);font-weight:600"></div>
 <div id="demoBanner" class="demo-banner" hidden><div class="wrap">Demo with made-up patients. Changes stay in this browser only.</div></div>
 <header class="top">
   <div class="wrap topin">
@@ -388,7 +391,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
       <a class="ravsbtn" id="ravsBtn" href="https://www.ravs.england.nhs.uk/" target="_blank" rel="noopener" title="Open RAVS beside the app. Log in there first.">Open RAVS</a>
       <button type="button" class="ravsbtn" id="ravsCheck" title="Check the connection to RAVS"><span class="dot idle" id="ravsDot"></span><span id="ravsText">Check RAVS</span></button>
       <label class="opbox" id="opBox" title="The person doing the admin on this computer. Everything saved is marked with this name."><span class="opk">Operator</span><select id="meSel" aria-label="Operator"></select></label>
-      <span class="sync" title="Live sync"><span class="dot" id="syncDot"></span><span id="syncText">Live</span></span>
+      <span class="sync" id="syncBox" title="Live sync"><span class="dot" id="syncDot"></span><span id="syncText">Live</span></span>
     </div>
   </div>
 </header>
@@ -427,7 +430,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
       <section class="panel box" id="box2">
         <div class="hrow"><h2><span class="num">2</span>Select vaccine</h2></div>
         <p class="lede" id="box2Locked">Find and confirm the patient first.</p>
-        <div id="box2Body">
+        <div id="box2Body" hidden>
           <div class="group">
             <div class="glabel">Vaccines</div>
             <div class="vaxpick" id="vaxMain"></div>
@@ -447,7 +450,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
           </details>
 
           <div id="dupBox"></div>
-          <div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given">Vaccinated</button><button class="btn ghost sm" type="submit" id="waitBtn" data-mode="waiting">Not vaccinated yet, add to waiting list</button></div>
+          <p class="small" id="giveHint" style="margin:10px 0 0;color:var(--bad)"></p><div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given">Vaccinated</button><button class="btn ghost sm" type="submit" id="waitBtn" data-mode="waiting">Not vaccinated yet, add to waiting list</button></div>
         </div>
       </section>
 
@@ -902,7 +905,11 @@ function renderPrivate() {
         <div class="right">${vaxTag(r)}<span class="mono small">${esc(r.batch || 'no batch')}</span><span class="small muted">${money(priceOf(r.vaccine))}</span></div></div>`).join('')}</div>`;
   }).join('') : '<div class="panel empty">No private vaccinations yet this season.</div>';
 }
-function setSync(ok, e) { $('#syncDot').classList.toggle('off', !ok); $('#syncText').textContent = ok ? 'Live' : 'Offline, retrying'; if (!ok) console.warn(e); }
+function setSync(ok, e) { $('#syncDot').classList.toggle('off', !ok); $('#syncBox').classList.toggle('bad', !ok); $('#syncText').textContent = ok ? 'Live' : 'Not saving, retrying'; if (!ok) { console.warn(e); showError(e); } }
+// Any error is shown at the top in words, so a screenshot says what went wrong.
+function showError(e) { const m = String((e && (e.message || e)) || 'Unknown error'); const b = $('#appError'); b.innerHTML = `<div class="wrap">Something went wrong: ${esc(m)}. Reload this page (Cmd+R). If it keeps happening, send a screenshot of this line.</div>`; b.hidden = false; }
+window.addEventListener('error', ev => showError(ev.error || ev.message));
+window.addEventListener('unhandledrejection', ev => showError(ev.reason));
 
 function visits(rows) {
   const m = new Map();
@@ -912,19 +919,24 @@ function visits(rows) {
 
 /* ===================== rendering ===================== */
 function renderAll(settingsChanged) {
-  if (!renderAll._f) { renderAll._f = true; renderFind(); }
-  $('#todayLabel').textContent = longDate(todayIso());
-  if (settingsChanged) { renderMe(); renderDeskForm(); renderSettings(); }
-  renderDeskLists(); renderVax(); renderTodo(); renderRecords();
-  if ($('#tab-private').classList.contains('on')) loadPrivate(); else renderPrivate();
+  // Each part draws on its own, so a problem in one screen can't leave the operator box or the clinic form blank.
+  const parts = [renderMe, renderFind, () => { $('#todayLabel').textContent = longDate(todayIso()); }];
+  if (settingsChanged || !renderAll._f) parts.push(renderDeskForm, renderSettings);
+  parts.push(renderDeskLists, renderVax, renderTodo, renderRecords, () => ($('#tab-private').classList.contains('on') ? loadPrivate() : renderPrivate()), updateGive);
+  if (!renderAll._f) renderAll._f = true; else parts.splice(1, 1);
+  let failed = null;
+  parts.forEach(fn => { try { fn(); } catch (e) { console.error(e); failed = failed || e; } });
+  if (failed) showError(failed);
 }
 function renderMe() {
   const people = [...new Set([...(S.staff || []), ...(S.vaccinators || [])])];
-  $('#meSel').innerHTML = '<option value="">Choose your name</option>' + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('');
+  $('#meSel').innerHTML = (people.length ? '<option value="">Choose your name</option>' : '<option value="">No names yet: add them in Settings</option>') + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('');
   $('#opBox').classList.toggle('empty', !me);
 }
 // Nothing can be entered until the operator box has a name. Trying anyway makes the box flash red.
 function flashOperator() {
+  // No names set up yet: take them to Settings to add one.
+  if (!$$('#meSel option').some(o => o.value)) { showTab('settings'); toast('Add your name under Staff in Settings, press Save, then choose it in the Operator box.'); const st = $('#sStaff'); if (st) st.focus(); return; }
   const box = $('#opBox'); box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
   window.scrollTo({ top: 0, behavior: 'smooth' }); $('#meSel').focus();
   toast('Choose the operator first (top right).');
@@ -933,8 +945,8 @@ function flashOperator() {
   if (me) return;
   const t = ev.target;
   if (!(t instanceof Element) || !t.closest('main, .scrim')) return;
-  // With no staff set up yet, Settings stays open so names can be added.
-  if (t.closest('#tab-settings') && !(S.staff || []).length && !(S.vaccinators || []).length) return;
+  // Settings always stays open, so names can be added and batches changed.
+  if (t.closest('#tab-settings')) return;
   if (type === 'keydown' && ev.key === 'Tab') return;
   ev.preventDefault(); ev.stopPropagation(); if (t.blur) t.blur();
   flashOperator();
@@ -1158,7 +1170,7 @@ function renderFind() {
   $('#findFields').hidden = confirmed || st === 'found' || st === 'searching';
   $('#box1').classList.toggle('done', confirmed);
   $('#box2').classList.toggle('locked', !confirmed);
-  $('#box2Body').hidden = !confirmed; $('#box2Locked').hidden = confirmed;
+  $('#box2Body').hidden = !confirmed; $('#box2Locked').hidden = confirmed; updateGive();
   const msg = form.findMsg ? `<div class="alert ${st === 'error' ? 'bad' : 'warn'}">${esc(form.findMsg)}</div>` : '';
   const skip = `<button type="button" class="btn ghost sm" data-findskip>Continue without checking RAVS</button>`;
   const kv = (k, v, cls = '') => `<div class="kv"><span class="k">${esc(k)}</span><span class="v ${cls}">${v}</span></div>`;
@@ -1201,6 +1213,21 @@ function validateForm(f) {
   });
   return errs;
 }
+// The Vaccinated and waiting-list buttons only work once the patient is confirmed and everything below is filled in.
+function giveProblems() {
+  if (form.step !== 'confirmed') return ['Find and confirm the patient first.'];
+  const errs = validateForm(readForm());
+  if (!S.vaccinator) errs.push('Choose the vaccinator on duty (Change, at the top).');
+  if (!me) errs.push('Choose the operator (top right).');
+  return errs;
+}
+function updateGive() {
+  // Before the patient is confirmed the buttons are hidden, and Enter in Find patient still starts the search.
+  const errs = form.step === 'confirmed' ? giveProblems() : [], wait = errs.filter(e => !/vaccinator on duty/.test(e));
+  $('#regBtn').disabled = errs.length > 0; $('#waitBtn').disabled = wait.length > 0;
+  $('#giveHint').textContent = form.step === 'confirmed' && errs.length ? 'Still needed: ' + errs.join(' ') : '';
+}
+['input', 'change', 'click'].forEach(type => document.addEventListener(type, () => setTimeout(updateGive), true));
 async function submitDesk(ev) {
   ev.preventDefault();
   if (form.step !== 'confirmed') { if (form.step === 'find' || form.step === 'error') { canSearch() ? startFind() : confirmPatient(false); } return; }
@@ -1222,7 +1249,7 @@ async function submitDesk(ev) {
     toast(`${f.given || f.surname || 'Patient'} ${given ? 'saved as vaccinated' : 'added to the waiting list'}`);
     clearForm(); await refresh(true);
   } catch (e) { $('#dupBox').innerHTML = `<div class="alert bad">Could not save. Check the connection and try again. (${esc(e.message || e)})</div>`; }
-  finally { $('#regBtn').disabled = $('#waitBtn').disabled = false; }
+  finally { updateGive(); }
 }
 function clearForm() {
   cancelFind(); findTimers.forEach(clearTimeout); findTimers = [];
@@ -1721,7 +1748,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '20 Oct 2026, 12';
+const BUILD = '20 Oct 2026, 13';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
@@ -1730,9 +1757,10 @@ const canAskRavs = () => EXT.ready && !verLt(EXT.version, '0.4.0');
 const helperAnswering = () => canAskRavs() && Date.now() - (EXT.answeredAt || 0) < 25000;
 function askRavs() { if (canAskRavs() && document.visibilityState === 'visible') window.postMessage({ psm: 'app-ravs-status' }, '*'); }
 setInterval(() => { askRavs(); renderRavs(); }, 10000);
+setTimeout(renderRavs, 3000); // by then the helper has said hello if it is installed
 document.addEventListener('visibilitychange', askRavs);
 function renderRavs() {
-  const [dot, text, title] = !EXT.ready ? ['idle', 'Not connected', "The RAVS Helper isn't installed in Chrome on this computer."]
+  const [dot, text, title] = !EXT.ready ? ['wait', 'Helper not found', "This page can't see the RAVS Helper. If it is installed (chrome://extensions), reload this page (Cmd+R)."]
     : EXT.error ? ['wait', 'Not connected', "This page can't reach the RAVS Helper. Reload this page (Cmd+R)."]
     : !canAskRavs() ? ['wait', 'Check RAVS', 'Update the RAVS Helper to check the connection here.']
     : EXT.answeredAt && !helperAnswering() ? ['wait', 'Not connected', 'The RAVS Helper stopped answering. Reload this page (Cmd+R).']
