@@ -63,13 +63,13 @@ nav.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset
 .count { font-family: var(--font-mono); font-size: 12px; background: var(--line-2); border-radius: 99px; padding: 1px 7px; color: var(--muted); font-weight: 500; }
 .count:empty, .count[data-n="0"] { display: none; }
 .count.hot { background: var(--warn-soft); color: var(--warn); }
-.topright { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; padding-block: 8px; }
+.topright { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; padding-block: 8px; }
 .topright select { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; max-width: 160px; }
 .sync { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
 .dot.off { background: var(--bad); }
 .dot.wait { background: var(--warn); } .dot.idle { background: var(--faint); }
-.ravsbtn { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.ravsbtn { font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .ravsbtn:hover { border-color: var(--muted); }
 .demo-banner { background: var(--info-soft); color: var(--info); font-size: 13px; }
 .demo-banner .wrap { padding-block: 5px; }
@@ -300,7 +300,8 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
       <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
     </nav>
     <div class="topright">
-      <a class="ravsbtn" id="ravsBtn" href="https://ravs.england.nhs.uk/record-vaccinations" target="_blank" rel="noopener"><span class="dot idle" id="ravsDot"></span><span id="ravsText">Open RAVS</span></a>
+      <a class="ravsbtn" id="ravsBtn" href="https://www.ravs.england.nhs.uk/" target="_blank" rel="noopener" title="Open RAVS beside the app. Log in there first.">Open RAVS</a>
+      <button type="button" class="ravsbtn" id="ravsCheck" title="Check the connection to RAVS"><span class="dot idle" id="ravsDot"></span><span id="ravsText">Check connection</span></button>
       <select id="meSel" aria-label="Who is using this computer"></select>
       <span class="sync" title="Live sync"><span class="dot" id="syncDot"></span><span id="syncText">Live</span></span>
     </div>
@@ -430,6 +431,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
     <p class="small muted" style="margin-top:14px">Check these against the current flu letter and COVID guidance. Anyone under the age line needs a reason recorded before they can be registered.</p>
     <div class="actions"><button class="btn primary" type="submit">Save settings</button></div>
   </form>
+  <p class="small muted" id="buildInfo" style="margin:14px 4px"></p>
 </section>
 </main>
 
@@ -1206,11 +1208,16 @@ function showTab(name) {
   store.set('psm.tab', name);
 }
 document.addEventListener('click', async ev => {
+  if (ev.target.closest('#ravsCheck')) return checkRavs();
   // A helper that is answering brings the RAVS tab to the front (or opens it); otherwise open RAVS in a new tab.
   if (ev.target.closest('#ravsBtn')) {
     ev.preventDefault();
+    const scr = { left: screen.availLeft || 0, top: screen.availTop || 0, width: screen.availWidth, height: screen.availHeight };
+    if (helperAnswering() && !verLt(EXT.version, '0.5.0')) { window.postMessage({ psm: 'app-side-by-side', screen: scr }, '*'); return setTimeout(askRavs, 2500); }
     if (helperAnswering()) { window.postMessage({ psm: 'app-show-ravs' }, '*'); return setTimeout(askRavs, 2500); }
-    const w = window.open($('#ravsBtn').href, '_blank');
+    // No helper: open RAVS in its own window on the right half of the screen.
+    const half = Math.floor(scr.width / 2);
+    const w = window.open($('#ravsBtn').href, 'psm-ravs', `popup,left=${scr.left + half},top=${scr.top},width=${half},height=${scr.height}`);
     if (!w) toast("Chrome didn't open RAVS from here. Use your RAVS bookmark.");
     return;
   }
@@ -1274,8 +1281,11 @@ $('#deskForm').addEventListener('submit', submitDesk);
 $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
-const EXT = { ready: false, version: '', ravs: '' };
-// The RAVS button in the header: opens RAVS, and with the helper shows whether the RAVS tab is ready.
+const EXT = { ready: false, version: '', ravs: '', error: '' };
+const BUILD = '20 Oct 2026, 6';
+function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
+renderBuild();
+// Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
 const canAskRavs = () => EXT.ready && !verLt(EXT.version, '0.4.0');
 // A helper removed or updated while this page was open stops answering until the page is reloaded.
 const helperAnswering = () => canAskRavs() && Date.now() - (EXT.answeredAt || 0) < 25000;
@@ -1283,14 +1293,27 @@ function askRavs() { if (canAskRavs() && document.visibilityState === 'visible')
 setInterval(() => { askRavs(); renderRavs(); }, 10000);
 document.addEventListener('visibilitychange', askRavs);
 function renderRavs() {
-  const [dot, text, title] = !EXT.ready ? ['idle', 'Open RAVS', "The RAVS Helper isn't installed in Chrome on this computer."]
-    : !canAskRavs() ? ['wait', 'Open RAVS', 'Update the RAVS Helper to see here whether RAVS is ready.']
-    : EXT.answeredAt && !helperAnswering() ? ['wait', 'Open RAVS', 'The RAVS Helper stopped answering. Reload this page (Cmd+R).']
-    : ({ ready: ['', 'RAVS ready', 'RAVS is open and logged in, and the RAVS Helper is running there. Click to show the RAVS tab.'],
-         login: ['wait', 'RAVS: log in', 'RAVS is open but needs you to log in. Click to show the RAVS tab.'],
-         reload: ['wait', 'RAVS: reload', 'The RAVS Helper is not running in the RAVS tab yet. Click to reload it.'] }[EXT.ravs]
-       || ['idle', 'Open RAVS', 'RAVS is not open. Click to open it.']);
-  $('#ravsDot').className = 'dot ' + dot; $('#ravsText').textContent = text; $('#ravsBtn').title = title;
+  const [dot, text, title] = !EXT.ready ? ['idle', 'Not connected', "The RAVS Helper isn't installed in Chrome on this computer."]
+    : EXT.error ? ['wait', 'Not connected', "This page can't reach the RAVS Helper. Reload this page (Cmd+R)."]
+    : !canAskRavs() ? ['wait', 'Check connection', 'Update the RAVS Helper to check the connection here.']
+    : EXT.answeredAt && !helperAnswering() ? ['wait', 'Not connected', 'The RAVS Helper stopped answering. Reload this page (Cmd+R).']
+    : ({ ready: ['', 'Connected', 'RAVS is open and logged in, and the RAVS Helper is running there.'],
+         login: ['wait', 'RAVS: log in', 'RAVS is open but needs you to log in.'],
+         reload: ['wait', 'RAVS: reload', 'The RAVS Helper is not running in the RAVS tab yet. Reload the RAVS tab (Cmd+R).'] }[EXT.ravs]
+       || ['idle', 'RAVS not open', 'RAVS is not open. Press Open RAVS and log in.']);
+  $('#ravsDot').className = 'dot ' + dot; $('#ravsText').textContent = text; $('#ravsCheck').title = title;
+  return title;
+}
+// Check connection: ask the helper now and say the answer in words.
+function checkRavs() {
+  if (!EXT.ready) return toast("The RAVS Helper isn't installed in Chrome on this computer.");
+  if (!canAskRavs()) return toast('Update the RAVS Helper on this computer to check the connection.');
+  const asked = Date.now(); $('#ravsText').textContent = 'Checking…';
+  window.postMessage({ psm: 'app-ravs-status' }, '*');
+  setTimeout(() => {
+    if ((EXT.answeredAt || 0) < asked) { EXT.error = EXT.error || 'no answer'; renderRavs(); renderBuild(); return toast("No answer from the RAVS Helper. Reload this page (Cmd+R) and check again."); }
+    toast(renderRavs());
+  }, 2500);
 }
 function ravsJob(r) {
   return { id: r.id, visitId: r.visitId, nhs: r.nhs, given: r.given, surname: r.surname, dob: r.dob, postcode: r.postcode, date: r.date,
@@ -1307,8 +1330,13 @@ function sendToRavs(rows) {
 window.addEventListener('message', async ev => {
   if (ev.source !== window || !ev.data) return;
   const d = ev.data;
-  if (d.psm === 'ext-ready') { EXT.version = d.version || ''; if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } renderRavs(); askRavs(); }
-  if (d.psm === 'ext-ravs-status') { EXT.ravs = d.state; EXT.answeredAt = Date.now(); renderRavs(); }
+  if (d.psm === 'ext-ready') { EXT.version = d.version || ''; renderBuild(); if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } renderRavs(); askRavs(); }
+  if (d.psm === 'ext-ravs-status') { EXT.ravs = d.state; EXT.answeredAt = Date.now(); EXT.error = ''; renderRavs(); renderBuild(); }
+  if (d.psm === 'ext-side-by-side-failed') { console.warn('RAVS Helper:', d.message); toast("Couldn't put RAVS beside the app, so it's shown in its own tab."); }
+  if (d.psm === 'ext-error') {
+    EXT.error = d.message || 'unknown'; EXT.answeredAt = 0; console.warn('RAVS Helper:', EXT.error); renderRavs(); renderBuild();
+    if (form.step === 'searching') { cancelFind(); form.step = 'error'; form.findMsg = "This page can't reach the RAVS Helper (it was probably updated after the page opened). Reload this page (Cmd+R) and search again."; renderFind(); }
+  }
   if (d.psm === 'ext-lookup-started' && d.id === form.lookupId) { form.lookupStarted = true; if (d.status) { form.findStatus = d.status; renderFind(); } }
   if (d.psm === 'ext-lookup-status' && d.id === form.lookupId && form.step === 'searching') { form.lookupStarted = form.lookupHeard = true; form.findStatus = d.text || ''; renderFind(); }
   if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }

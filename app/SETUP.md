@@ -56,6 +56,8 @@ Click **Save settings**. Settings are shared, so every computer picks them up wi
 
 ## Day to day
 
+At the start of the day, press **Open RAVS** at the top of the app and log in to RAVS. RAVS opens on the right half of the screen with the app on the left. Then press the connection button next to it: it should say **Connected**.
+
 1. **Before opening:** in Manage your appointments, open today's day view.
    - Select the appointments table, copy it, and use **Paste bookings** on the Front desk tab.
 2. **Clinic, box 1 (Find patient):** type the NHS number, or first name, last name and date of birth, and press **Search RAVS**. For bookings, **Check in** fills these in and searches straight away.
