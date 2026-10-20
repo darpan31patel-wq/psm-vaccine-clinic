@@ -37,6 +37,7 @@
       });
     }
     if (d.psm === 'app-show-ravs') chrome.runtime.sendMessage({ type: 'open-ravs', focus: true });
+    if (d.psm === 'app-ravs-status') chrome.runtime.sendMessage({ type: 'ravs-status' }, res => window.postMessage({ psm: 'ext-ravs-status', state: (res && res.state) || 'closed' }, '*'));
     if (d.psm === 'app-lookup-cancel' && d.id) {
       chrome.storage.local.get({ queue: [], current: null }, ({ queue, current }) => {
         chrome.storage.local.set(Object.assign({ queue: queue.filter(j => j.id !== d.id) }, current === d.id ? { current: null, stage: null } : {}));

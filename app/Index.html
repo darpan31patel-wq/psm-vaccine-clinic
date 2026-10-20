@@ -68,6 +68,9 @@ nav.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset
 .sync { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
 .dot.off { background: var(--bad); }
+.dot.wait { background: var(--warn); } .dot.idle { background: var(--faint); }
+.ravsbtn { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.ravsbtn:hover { border-color: var(--muted); }
 .demo-banner { background: var(--info-soft); color: var(--info); font-size: 13px; }
 .demo-banner .wrap { padding-block: 5px; }
 @media (max-width: 720px) {
@@ -297,6 +300,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
       <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
     </nav>
     <div class="topright">
+      <a class="ravsbtn" id="ravsBtn" href="https://ravs.england.nhs.uk/record-vaccinations" target="_blank" rel="noopener"><span class="dot idle" id="ravsDot"></span><span id="ravsText">Open RAVS</span></a>
       <select id="meSel" aria-label="Who is using this computer"></select>
       <span class="sync" title="Live sync"><span class="dot" id="syncDot"></span><span id="syncText">Live</span></span>
     </div>
@@ -1202,6 +1206,7 @@ function showTab(name) {
   store.set('psm.tab', name);
 }
 document.addEventListener('click', async ev => {
+  if (ev.target.closest('#ravsBtn') && canAskRavs()) { ev.preventDefault(); window.postMessage({ psm: 'app-show-ravs' }, '*'); return setTimeout(askRavs, 2500); }
   const b = ev.target.closest('button, [data-scrim]'); if (!b) return;
   const d = b.dataset;
   if (b.matches('[data-scrim]') && ev.target === b) return closeModal();
@@ -1262,7 +1267,21 @@ $('#deskForm').addEventListener('submit', submitDesk);
 $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
-const EXT = { ready: false, version: '' };
+const EXT = { ready: false, version: '', ravs: '' };
+// The RAVS button in the header: opens RAVS, and with the helper shows whether the RAVS tab is ready.
+const canAskRavs = () => EXT.ready && !verLt(EXT.version, '0.4.0');
+function askRavs() { if (canAskRavs() && document.visibilityState === 'visible') window.postMessage({ psm: 'app-ravs-status' }, '*'); }
+setInterval(askRavs, 10000);
+document.addEventListener('visibilitychange', askRavs);
+function renderRavs() {
+  const [dot, text, title] = !EXT.ready ? ['idle', 'Open RAVS', "The RAVS Helper isn't installed in Chrome on this computer."]
+    : !canAskRavs() ? ['wait', 'Open RAVS', 'Update the RAVS Helper to see here whether RAVS is ready.']
+    : ({ ready: ['', 'RAVS ready', 'RAVS is open and logged in, and the RAVS Helper is running there. Click to show the RAVS tab.'],
+         login: ['wait', 'RAVS: log in', 'RAVS is open but needs you to log in. Click to show the RAVS tab.'],
+         reload: ['wait', 'RAVS: reload', 'The RAVS Helper is not running in the RAVS tab yet. Click to reload it.'] }[EXT.ravs]
+       || ['idle', 'Open RAVS', 'RAVS is not open. Click to open it.']);
+  $('#ravsDot').className = 'dot ' + dot; $('#ravsText').textContent = text; $('#ravsBtn').title = title;
+}
 function ravsJob(r) {
   return { id: r.id, visitId: r.visitId, nhs: r.nhs, given: r.given, surname: r.surname, dob: r.dob, postcode: r.postcode, date: r.date,
     vaccine: r.vaccine, ravsVaccine: VACCINES[r.vaccine]?.ravs || r.vaccine, product: r.product, batch: r.batch, vaccinator: r.vaccinator,
@@ -1278,7 +1297,8 @@ function sendToRavs(rows) {
 window.addEventListener('message', async ev => {
   if (ev.source !== window || !ev.data) return;
   const d = ev.data;
-  if (d.psm === 'ext-ready') { EXT.version = d.version || ''; if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } }
+  if (d.psm === 'ext-ready') { EXT.version = d.version || ''; if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } renderRavs(); askRavs(); }
+  if (d.psm === 'ext-ravs-status') { EXT.ravs = d.state; renderRavs(); }
   if (d.psm === 'ext-lookup-started' && d.id === form.lookupId) { form.lookupStarted = true; if (d.status) { form.findStatus = d.status; renderFind(); } }
   if (d.psm === 'ext-lookup-status' && d.id === form.lookupId && form.step === 'searching') { form.lookupStarted = form.lookupHeard = true; form.findStatus = d.text || ''; renderFind(); }
   if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }

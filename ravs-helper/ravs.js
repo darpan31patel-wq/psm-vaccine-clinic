@@ -338,10 +338,10 @@
     const b = root.getElementById('b');
     const job = st.queue.find(j => j.id === st.current);
     const esc = s => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    host.style.display = (st.queue.length || message) ? '' : 'none';
+    host.style.display = '';
     const final = step() === 'confirm' && job;
     b.innerHTML = (job ? `<div><div class="who">${esc(job.surname)}, ${esc(job.given)}</div><div class="sub">${job.lookup ? 'Patient search, nothing is recorded' : `${esc(job.vaccine)} · ${esc(String(job.product || '').replace(/^.*\(([^)]+)\)$/, '$1'))} · batch ${esc(job.batch)}`} · ${st.queue.length} in queue</div></div>`
-      : `<div class="sub">${st.queue.length ? st.queue.length + ' waiting' : 'Nothing waiting. Send vaccinations from the To record tab in the app.'}</div>`) +
+      : `<div class="sub">${st.queue.length ? st.queue.length + ' waiting' : looksLikeLogin() ? 'Log in to RAVS, then the helper is ready.' : 'Connected and ready. Patient searches and vaccinations from the clinic app appear here.'}</div>`) +
       (message ? `<div class="m ${messageBad ? 'bad' : final ? 'final' : ''}">${esc(message)}</div>` : '') +
       `<div class="row">${st.paused ? '<button class="pri" id="resume">Resume</button>' : (st.queue.length ? '<button id="pause">Pause</button>' : '')}
        ${job ? '<button id="skip">Skip this one</button><button id="refill">Fill this page again</button>' : ''}${st.queue.length ? '<button id="clear">Clear queue</button>' : ''}</div>`;
@@ -353,7 +353,7 @@
     on('clear', async () => { await set({ queue: [], current: null, stage: null, captured: {} }); message = 'Queue cleared.'; render(await state()); });
   }
 
-  chrome.runtime.onMessage.addListener((msg, _s, reply) => { if (msg && msg.type === 'start-next') { lastKey = ''; state().then(st => (st.current ? run() : startNext())); reply({ ok: true }); } });
+  chrome.runtime.onMessage.addListener((msg, _s, reply) => { if (msg && msg.type === 'ping') reply({ login: looksLikeLogin() }); if (msg && msg.type === 'start-next') { lastKey = ''; state().then(st => (st.current ? run() : startNext())); reply({ ok: true }); } });
   chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.queue) state().then(st => { if (!st.current && st.queue.length && !st.paused) startNext(); else render(st); }); });
 
   // RAVS may change pages without a full reload, so watch for the URL or heading changing.
