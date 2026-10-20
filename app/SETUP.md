@@ -58,9 +58,10 @@ Click **Save settings**. Settings are shared, so every computer picks them up wi
 
 1. **Before opening:** in Manage your appointments, open today's day view.
    - Select the appointments table, copy it, and use **Paste bookings** on the Front desk tab.
-2. **Clinic:** for bookings, press **Check in**. For walk-ins, type NHS number or name, date of birth and postcode, then press **Vaccinated** once the jab is given. **Not vaccinated yet** puts them on a waiting list instead.
-   - The age check runs automatically. Anyone under the age line needs a reason before they can be registered.
-3. **Vaccinated today:** batch, arm, consent and vaccinator are filled from Settings. **Edit** on the list changes any of them.
+2. **Clinic, box 1 (Find patient):** type the NHS number, or first name, last name and date of birth, and press **Search RAVS**. For bookings, **Check in** fills these in and searches straight away.
+   - The RAVS Helper looks the patient up in the RAVS tab and shows their name, date of birth, NHS number, address, GP and past vaccinations. Check them with the patient, then press **Confirm patient**.
+   - This needs the RAVS Helper installed and RAVS logged in on the front-desk Mac. Without it, use **Continue without checking RAVS**.
+3. **Clinic, box 2 (Record vaccination):** choose the vaccines and press **Vaccinated** once the jab is given. Batch, arm, consent and vaccinator come from Settings, and **Edit** on the Vaccinated today list changes any of them. **Not vaccinated yet** puts the patient on a waiting list instead.
 4. **To record:** shows everything not yet on RAVS.
    - Copy each field across, save in RAVS, then press **Entered on RAVS**.
    - Anything from an earlier day turns amber. It turns red when it's 10 or more days late, because after 15 days it can't be claimed.

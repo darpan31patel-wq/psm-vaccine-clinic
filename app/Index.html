@@ -181,6 +181,27 @@ details.extra .fields { margin-top: 14px; }
 .summary { display: flex; gap: 6px 20px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 6px; }
 .summary b { color: var(--ink); font-family: var(--font-mono); }
 
+/* find patient / record boxes */
+.box h2 { display: flex; align-items: center; gap: 10px; }
+.num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; display: inline-grid; place-items: center; flex: none; }
+.box.locked .num { background: var(--line); color: var(--muted); }
+.box.locked h2 { color: var(--muted); }
+.box.done .num { background: var(--ok); }
+#findArea:empty { display: none; }
+#findArea { margin-top: 20px; display: grid; gap: 14px; }
+.profile { border: 1px solid var(--line); border-radius: 12px; padding: 4px 16px; background: var(--surface-2); }
+.profile .kv { grid-template-columns: 120px minmax(0, 1fr); min-height: 40px; }
+.profile .kv:last-child { border-bottom: 0; }
+.profile .kv .v { font-weight: 700; }
+.profile .hist { white-space: pre-line; font-weight: 400; font-size: 14px; }
+.searching { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+.spin { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; flex: none; }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: spin .8s linear infinite; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.confirmed { display: grid; gap: 2px; }
+.confirmed .nm { font-size: 18px; font-weight: 700; }
+.confirmed .meta { color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 2px 14px; }
+
 /* vaccinator */
 .defaults { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px; font-size: 14px; color: var(--muted); margin: 0 0 24px; padding: 12px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .defaults b { color: var(--ink); font-weight: 700; }
@@ -288,38 +309,46 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 <section class="tab on" id="tab-desk">
   <div class="defaults" id="defaultsBar"></div>
   <div class="grid2 desk">
-    <form class="panel" id="deskForm" autocomplete="off">
-      <div class="hrow"><h2 id="formTitle">Register a patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
-
-      <div class="group">
-        <div class="glabel">Patient <span>NHS number, or name and postcode</span></div>
-        <div class="fields">
-          <div class="f half"><label for="fNhs">NHS number</label><input id="fNhs" class="mono" inputmode="numeric" placeholder="000 000 0000"><span class="hint" id="nhsHint"></span></div>
-          <div class="f half"><label for="fDob">Date of birth</label><input id="fDob" class="mono" inputmode="numeric" placeholder="dd/mm/yyyy"><span class="hint" id="dobHint"></span></div>
-          <div class="f half"><label for="fGiven">First name</label><input id="fGiven"></div>
-          <div class="f half"><label for="fSurname">Last name</label><input id="fSurname"></div>
-          <div class="f half"><label for="fPostcode">Postcode</label><input id="fPostcode" class="mono"></div>
+    <form class="stack" id="deskForm" autocomplete="off">
+      <section class="panel box" id="box1">
+        <div class="hrow"><h2><span class="num">1</span>Find patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
+        <div id="findFields">
+          <p class="lede">Type what you have: the NHS number, or first name, last name and date of birth. Add the postcode if you have it.</p>
+          <div class="fields" style="margin-top:16px">
+            <div class="f half"><label for="fNhs">NHS number</label><input id="fNhs" class="mono" inputmode="numeric" placeholder="000 000 0000"><span class="hint" id="nhsHint"></span></div>
+            <div class="f half"><label for="fDob">Date of birth</label><input id="fDob" class="mono" inputmode="numeric" placeholder="dd/mm/yyyy"><span class="hint" id="dobHint"></span></div>
+            <div class="f half"><label for="fGiven">First name</label><input id="fGiven"></div>
+            <div class="f half"><label for="fSurname">Last name</label><input id="fSurname"></div>
+            <div class="f half"><label for="fPostcode">Postcode</label><input id="fPostcode" class="mono"></div>
+          </div>
         </div>
-      </div>
+        <div id="findArea"></div>
+      </section>
 
-      <div class="group">
-        <div class="glabel">Vaccines</div>
-        <div class="vaxpick" id="vaxMain"></div>
-        <div class="vaxpick" id="vaxMore" style="margin-top:8px"></div>
-        <div class="eligs" id="eligBox"></div>
-      </div>
+      <section class="panel box" id="box2">
+        <div class="hrow"><h2><span class="num">2</span>Record vaccination</h2></div>
+        <p class="lede" id="box2Locked">Find and confirm the patient first.</p>
+        <div id="box2Body">
+          <div class="group">
+            <div class="glabel">Vaccines</div>
+            <div class="vaxpick" id="vaxMain"></div>
+            <div class="vaxpick" id="vaxMore" style="margin-top:8px"></div>
+            <div class="eligs" id="eligBox"></div>
+          </div>
 
-      <details class="extra" id="extraBox">
-        <summary>Phone, note or location <span class="muted" id="extraSum"></span></summary>
-        <div class="fields">
-          <div class="f half"><label for="fPhone">Phone</label><input id="fPhone" class="mono" inputmode="tel"></div>
-          <div class="f half"><label for="fLocation">Where</label><select id="fLocation"></select></div>
-          <div class="f"><label for="fNote">Note for the vaccinator</label><input id="fNote"></div>
+          <details class="extra" id="extraBox">
+            <summary>Phone, note or location <span class="muted" id="extraSum"></span></summary>
+            <div class="fields">
+              <div class="f half"><label for="fPhone">Phone</label><input id="fPhone" class="mono" inputmode="tel"></div>
+              <div class="f half"><label for="fLocation">Where</label><select id="fLocation"></select></div>
+              <div class="f"><label for="fNote">Note for the vaccinator</label><input id="fNote"></div>
+            </div>
+          </details>
+
+          <div id="dupBox"></div>
+          <div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given">Vaccinated</button><button class="btn ghost sm" type="submit" id="waitBtn" data-mode="waiting">Not vaccinated yet, add to waiting list</button></div>
         </div>
-      </details>
-
-      <div id="dupBox"></div>
-      <div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given">Vaccinated</button><button class="btn ghost sm" type="submit" id="waitBtn" data-mode="waiting">Not vaccinated yet, add to waiting list</button></div>
+      </section>
     </form>
 
     <div class="panel">
@@ -666,7 +695,7 @@ const API = hasGas ? {
 let S = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 let ROWS = [], DAYS = [], VERSION = -1;
 let me = store.get('psm.me', '');
-let form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '' };
+let form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' };
 let todoFilter = 'All';
 let editing = null;
 
@@ -690,6 +719,7 @@ function visits(rows) {
 
 /* ===================== rendering ===================== */
 function renderAll(settingsChanged) {
+  if (!renderAll._f) { renderAll._f = true; renderFind(); }
   $('#todayLabel').textContent = longDate(todayIso());
   if (settingsChanged) { renderMe(); renderDeskForm(); renderSettings(); }
   renderDeskLists(); renderVax(); renderTodo(); renderRecords();
@@ -714,7 +744,6 @@ function renderDeskForm() {
   const locs = S.locations || ['Pharmacy'], loc = $('#fLocation').value || store.get('psm.loc', locs[0]);
   $('#fLocation').innerHTML = locs.map(l => `<option ${l === loc ? 'selected' : ''}>${esc(l)}</option>`).join('');
   $('#srcPill').textContent = form.source; $('#srcPill').className = 'pill ' + (form.source === 'Booked' ? 'p-booked' : 'p-neutral');
-  $('#formTitle').textContent = form.bookingVisitId ? 'Check in booked patient' : 'Register a patient';
   renderExtraSum(); renderElig();
 }
 function renderExtraSum() {
@@ -764,7 +793,105 @@ function readForm() {
   return {
     nhs: cleanNhs($('#fNhs').value), dob: parseDob($('#fDob').value), given: titleCase($('#fGiven').value.trim()), surname: $('#fSurname').value.trim().toUpperCase(),
     postcode: fmtPostcode($('#fPostcode').value), phone: $('#fPhone').value.trim(), location: $('#fLocation').value, note: $('#fNote').value.trim(),
+    address: form.ravs?.address || '', gp: form.ravs?.gp || '',
   };
+}
+
+/* ---------- box 1: find the patient on RAVS, then confirm ---------- */
+// form.step: find -> searching -> found | error -> confirmed. Box 2 only opens once confirmed.
+const canSearch = () => EXT.ready || !hasGas;
+function findErrors(f) {
+  const errs = [];
+  if (f.nhs && !nhsValid(f.nhs)) errs.push('The NHS number is not valid. Check the digits.');
+  if (!f.nhs && !(f.given && f.surname && f.dob)) errs.push('Enter the NHS number, or first name, last name and date of birth.');
+  if ($('#fDob').value && !f.dob) errs.push('Enter the date of birth as dd/mm/yyyy.');
+  return errs;
+}
+function startFind() {
+  const f = readForm(), errs = findErrors(f);
+  if (errs.length) { form.step = 'find'; form.findMsg = errs.join(' '); return renderFind(); }
+  form.lookupId = 'lk' + uid(); form.step = 'searching'; form.findMsg = ''; renderFind();
+  const job = { id: form.lookupId, nhs: f.nhs, given: f.given, surname: f.surname, dob: f.dob, postcode: f.postcode };
+  clearTimeout(startFind._t);
+  startFind._t = setTimeout(() => { if (form.step === 'searching' && form.lookupId === job.id) { cancelFind(); form.step = 'error'; form.findMsg = 'No answer from RAVS. Check the RAVS tab is open and logged in on this computer, then search again.'; renderFind(); } }, 60000);
+  if (EXT.ready) window.postMessage({ psm: 'app-lookup', job }, '*');
+  else setTimeout(() => onLookup(demoLookup(job)), 1200);
+}
+function cancelFind() { if (form.lookupId && EXT.ready) window.postMessage({ psm: 'app-lookup-cancel', id: form.lookupId }, '*'); form.lookupId = ''; }
+// Demo only: pretends to be RAVS so the flow can be tried without the helper.
+function demoLookup(job) {
+  const known = ROWS.find(r => (job.nhs && r.nhs === job.nhs) || (job.dob && r.dob === job.dob && r.surname === job.surname));
+  if (job.nhs && !known && job.nhs !== '9434765919') return { id: job.id, ok: false, error: 'RAVS could not find this patient. (Demo: try an NHS number from the list.)' };
+  const p = known || job;
+  return { id: job.id, ok: true, patient: { name: `${(p.given || 'Demo').toUpperCase()} ${p.surname || 'PATIENT'}`, dob: p.dob || '1950-01-01', nhs: p.nhs || '9434765919',
+    address: `12 Example Road, Surbiton, ${p.postcode || 'KT6 4AA'}`, gp: 'Demo Surgery, 1 High Street', history: 'Flu, 14 October 2025\nCOVID-19, 2 November 2025' } };
+}
+function onLookup(res) {
+  if (!res || res.id !== form.lookupId || form.step !== 'searching') return;
+  clearTimeout(startFind._t);
+  if (res.ok) { form.step = 'found'; form.found = res.patient; } else { form.step = 'error'; form.findMsg = res.error || 'RAVS could not find this patient.'; }
+  renderFind();
+}
+function splitName(full) {
+  const parts = String(full || '').trim().split(/\s+/);
+  return { given: titleCase(parts.slice(0, -1).join(' ')), surname: (parts.slice(-1)[0] || '').toUpperCase() };
+}
+function postcodeFrom(address) { const m = String(address || '').toUpperCase().match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\s*$/); return m ? fmtPostcode(m[1]) : ''; }
+function differences(f, p) {
+  const out = [];
+  if (f.nhs && p.nhs && f.nhs !== p.nhs) out.push(`NHS number on RAVS is ${fmtNhs(p.nhs)}, you typed ${fmtNhs(f.nhs)}`);
+  if (f.dob && p.dob && f.dob !== p.dob) out.push(`date of birth on RAVS is ${ukDate(p.dob)}, you typed ${ukDate(f.dob)}`);
+  if (f.surname && p.name && !p.name.toUpperCase().includes(f.surname)) out.push(`name on RAVS is ${p.name}`);
+  return out;
+}
+function confirmPatient(checked) {
+  const p = form.found || {};
+  if (checked) {
+    const nm = splitName(p.name);
+    $('#fNhs').value = fmtNhs(p.nhs || cleanNhs($('#fNhs').value));
+    if (p.dob) $('#fDob').value = ukDate(p.dob);
+    if (nm.surname) { $('#fSurname').value = nm.surname; if (!$('#fGiven').value.trim() || !$('#fGiven').value.toUpperCase().startsWith(nm.given.split(' ')[0].toUpperCase())) $('#fGiven').value = nm.given; }
+    const pc = postcodeFrom(p.address); if (pc) $('#fPostcode').value = pc;
+    form.ravs = { address: p.address || '', gp: p.gp || '' };
+  } else {
+    const f = readForm(), errs = [];
+    if (!f.dob) errs.push('Enter the date of birth, it is needed for the age check.');
+    if (f.nhs && !nhsValid(f.nhs)) errs.push('The NHS number is not valid. Check the digits.');
+    if (!f.nhs && !(f.given && f.surname)) errs.push('Enter the NHS number, or first and last name.');
+    if (errs.length) { form.findMsg = errs.join(' '); return renderFind(); }
+    form.ravs = null;
+  }
+  form.checked = !!checked; form.step = 'confirmed'; form.findMsg = '';
+  onDobInput(); onNhsInput(); checkDuplicates(); renderFind();
+  $('#box2').scrollIntoView({ block: 'nearest' });
+}
+function renderFind() {
+  const st = form.step || 'find', area = $('#findArea'), f = readForm();
+  const confirmed = st === 'confirmed';
+  $('#findFields').hidden = confirmed || st === 'found' || st === 'searching';
+  $('#box1').classList.toggle('done', confirmed);
+  $('#box2').classList.toggle('locked', !confirmed);
+  $('#box2Body').hidden = !confirmed; $('#box2Locked').hidden = confirmed;
+  const msg = form.findMsg ? `<div class="alert ${st === 'error' ? 'bad' : 'warn'}">${esc(form.findMsg)}</div>` : '';
+  const skip = `<button type="button" class="btn ghost sm" data-findskip>Continue without checking RAVS</button>`;
+  const kv = (k, v, cls = '') => `<div class="kv"><span class="k">${esc(k)}</span><span class="v ${cls}">${v}</span></div>`;
+  if (st === 'find' || st === 'error') {
+    area.innerHTML = msg + (canSearch()
+      ? `<div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-find>${st === 'error' ? 'Search again' : 'Search RAVS'}</button>${skip}</div>${!EXT.ready ? '<p class="small muted" style="margin:0">Demo: RAVS answers are made up here. On your Macs the RAVS Helper looks the patient up in the RAVS tab.</p>' : ''}`
+      : `<div class="alert info">The RAVS Helper isn't installed in Chrome on this computer, so the patient can't be checked on RAVS from here.</div><div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-findskip>Continue</button></div>`);
+  } else if (st === 'searching') {
+    area.innerHTML = `<div class="searching"><span class="spin"></span><span>Searching RAVS for ${esc(f.nhs ? fmtNhs(f.nhs) : `${f.given} ${f.surname}`)}…</span><span class="sp" style="flex:1"></span><button type="button" class="btn ghost sm" data-findcancel>Cancel</button></div>`;
+  } else if (st === 'found') {
+    const p = form.found, diffs = differences(f, p);
+    area.innerHTML = `<div class="glabel" style="margin:0">Found on RAVS. Check these with the patient.</div>
+      <div class="profile">${kv('Name', esc(p.name || '–'))}${kv('Date of birth', p.dob ? `<span class="mono">${esc(ukDate(p.dob))}</span> <span class="muted" style="font-weight:400">age ${ageOn(p.dob, todayIso())}</span>` : '<span class="muted">not shown</span>')}${kv('NHS number', p.nhs ? `<span class="mono">${esc(fmtNhs(p.nhs))}</span>` : '<span class="muted">not shown</span>')}${kv('Address', esc(p.address || 'not shown'))}${kv('GP', esc(p.gp || 'not shown'))}${p.history ? kv('Past vaccinations', esc(p.history), 'hist') : ''}</div>
+      ${diffs.length ? `<div class="alert warn">Check: ${esc(diffs.join('; '))}.</div>` : ''}${!(p.nhs && p.address && p.gp) ? '<div class="alert warn">Some details are missing, so this may not be the full patient record.</div>' : ''}
+      <div class="actions" style="margin-top:0"><button type="button" class="btn go lg" data-findok>Confirm patient</button><button type="button" class="btn ghost" data-findno>Not the right patient</button></div>`;
+  } else {
+    const age = f.dob ? ageOn(f.dob, todayIso()) : '';
+    area.innerHTML = `<div class="confirmed"><span class="nm">${esc(fullName(f) || 'Name not given')}</span><span class="meta">${f.dob ? `<span class="mono">${esc(ukDate(f.dob))}</span><span>age ${age}</span>` : ''}${f.nhs ? `<span class="mono">${esc(fmtNhs(f.nhs))}</span>` : ''}${f.gp ? `<span>${esc(f.gp)}</span>` : ''}</span></div>
+      <div class="actions" style="margin-top:0">${form.checked ? '<span class="pill p-entered">Checked on RAVS</span>' : '<span class="pill p-waiting">Not checked on RAVS</span>'}<span style="flex:1"></span><button type="button" class="btn ghost sm" data-findchange>Change patient</button></div>`;
+  }
 }
 function validateForm(f) {
   const errs = [];
@@ -781,6 +908,7 @@ function validateForm(f) {
 }
 async function submitDesk(ev) {
   ev.preventDefault();
+  if (form.step !== 'confirmed') { if (form.step === 'find' || form.step === 'error') { canSearch() ? startFind() : confirmPatient(false); } return; }
   const mode = ev.submitter?.dataset.mode || 'given';
   const f = readForm(); const errs = validateForm(f);
   if (mode === 'given' && !S.vaccinator) errs.push('Choose the vaccinator on duty first (Change, at the top).');
@@ -789,6 +917,7 @@ async function submitDesk(ev) {
   const rows = form.vaccines.map(v => {
     const e = checkEligibility(v, f.dob, S), el = form.elig[v] || {};
     return { id: uid(), visitId, date: t, time, source: form.source, nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone,
+      address: f.address, gp: f.gp,
       vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S) : '', eligibility: e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''), eligNote: el.note || '',
       consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? 'given' : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: '', enteredBy: '', note: f.note, updatedAt: now };
   });
@@ -801,9 +930,10 @@ async function submitDesk(ev) {
   finally { $('#regBtn').disabled = $('#waitBtn').disabled = false; }
 }
 function clearForm() {
-  $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '' }; showMoreVax = false;
+  cancelFind(); clearTimeout(startFind._t);
+  $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' }; showMoreVax = false;
   $('#nhsHint').textContent = ''; $('#dobHint').textContent = ''; $('#dupBox').innerHTML = '';
-  renderDeskForm(); $('#fNhs').focus();
+  renderDeskForm(); renderFind(); $('#fNhs').focus();
 }
 let dupTimer;
 function checkDuplicates() {
@@ -831,7 +961,7 @@ function checkInBooking(visitId) {
   $('#fNhs').value = fmtNhs(r.nhs); $('#fDob').value = ukDate(r.dob); $('#fGiven').value = r.given; $('#fSurname').value = r.surname; $('#fPostcode').value = r.postcode || ''; $('#fPhone').value = r.phone || '';
   form.vaccines = v.map(x => x.vaccine); form.source = 'Booked'; form.bookingVisitId = visitId;
   showTab('desk'); renderDeskForm(); onDobInput(); onNhsInput(); checkDuplicates();
-  $('#fPostcode').focus();
+  if (canSearch()) startFind(); else renderFind();
 }
 function onNhsInput() {
   const n = cleanNhs($('#fNhs').value), h = $('#nhsHint');
@@ -1063,6 +1193,12 @@ document.addEventListener('click', async ev => {
   if (d.tab) return showTab(d.tab);
   if (d.goto) return showTab(d.goto);
   if (d.vax) { const v = d.vax; form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines, v]; return renderDeskForm(); }
+  if ('find' in d) return startFind();
+  if ('findcancel' in d) { cancelFind(); form.step = 'find'; return renderFind(); }
+  if ('findok' in d) return confirmPatient(true);
+  if ('findskip' in d) return confirmPatient(false);
+  if ('findno' in d) { form.step = 'find'; form.found = null; form.findMsg = 'Not the right patient. Check the details with the patient and search again.'; renderFind(); return $('#fNhs').focus(); }
+  if ('findchange' in d) { form.step = 'find'; form.found = null; form.ravs = null; form.checked = false; renderFind(); return $('#fNhs').focus(); }
   if ('morevax' in d) { showMoreVax = true; return renderDeskForm(); }
   if (d.toggleTodo) { openTodo.has(d.toggleTodo) ? openTodo.delete(d.toggleTodo) : openTodo.add(d.toggleTodo); return renderTodo(); }
   if (d.checkin) return checkInBooking(d.checkin);
@@ -1126,7 +1262,8 @@ function sendToRavs(rows) {
 window.addEventListener('message', async ev => {
   if (ev.source !== window || !ev.data) return;
   const d = ev.data;
-  if (d.psm === 'ext-ready') { if (!EXT.ready) { EXT.ready = true; renderTodo(); } }
+  if (d.psm === 'ext-ready') { if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } }
+  if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }
   if (d.psm === 'ext-queued') toast(`${d.added} sent to RAVS Helper (${d.total} in its queue)`);
   if (d.psm === 'ext-done' && Array.isArray(d.results) && d.results.length) {
     const changes = d.results.map(x => {
