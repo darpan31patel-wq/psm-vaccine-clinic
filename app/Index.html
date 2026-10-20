@@ -252,6 +252,11 @@ details.extra .fields { margin-top: 14px; }
 .profile .kv:last-child { border-bottom: 0; }
 .profile .kv .v { font-weight: 500; }
 .profile .kv:first-child .v { font-weight: 700; }
+.off-only { display: none; }
+.offline .off-only { display: flex; }
+.offline #findFields .lede { display: none; }
+.offchip[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); color: #fff; }
+.panel.box.offline { border-top-color: var(--warn); }
 .foundhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .histbox { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .histbox.hist { white-space: pre-line; font-size: 14px; padding: 10px 14px; }
@@ -396,7 +401,8 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
   <form class="grid2 desk" id="deskForm" autocomplete="off">
     <div class="stack">
       <section class="panel box" id="box1">
-        <div class="hrow"><h2><span class="num">1</span>Find patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
+        <div class="hrow"><h2><span class="num">1</span>Find patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="chip small offchip" id="offlineBtn" aria-pressed="false" title="Use when RAVS is down: take full details by hand">Offline mode</button><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
+        <div class="alert warn" id="offlineNote" hidden style="margin-top:12px">Offline mode: RAVS is not checked. Take the full details below. They go on To record to enter on RAVS when it is back.</div>
         <div id="findFields">
           <p class="lede">Enter the NHS number on its own, or the first name, last name and date of birth. The postcode is optional. You can also paste a copied booking into any box.</p>
           <div class="fields" style="margin-top:16px">
@@ -405,6 +411,12 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
             <div class="f half"><label for="fGiven">First name</label><input id="fGiven"></div>
             <div class="f half"><label for="fSurname">Last name</label><input id="fSurname"></div>
             <div class="f half"><label for="fPostcode">Postcode</label><input id="fPostcode" class="mono"></div>
+            <div class="f half off-only"><label for="fGender">Gender</label><select id="fGender"><option value=""></option><option>Female</option><option>Male</option><option>Other</option><option>Not known</option></select></div>
+            <div class="f off-only"><label for="fAddress">Full address</label><input id="fAddress"></div>
+            <div class="f half off-only"><label for="fOffPhone">Phone</label><input id="fOffPhone" class="mono" inputmode="tel"></div>
+            <div class="f half off-only"><label for="fEmail">Email</label><input id="fEmail" type="email"></div>
+            <div class="f half off-only"><label for="fVaxDate">Date of vaccination</label><input id="fVaxDate" type="date"></div>
+            <div class="f off-only"><label for="fOffNote">Notes</label><input id="fOffNote"></div>
           </div>
         </div>
         <div id="findArea"></div>
@@ -833,6 +845,8 @@ let ROWS = [], DAYS = [], VERSION = -1;
 // The operator is kept for the day on this computer; a new day starts with the box empty.
 let me = store.get('psm.meDay', '') === todayIso() ? store.get('psm.me', '') : '';
 let form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' };
+// Offline mode (RAVS down) stays on for this computer until it is switched off.
+let offline = !!store.get('psm.offline', false);
 let todoFilter = 'All';
 let editing = null;
 
@@ -1020,6 +1034,15 @@ function readForm() {
     nhs: cleanNhs($('#fNhs').value), dob: parseDob($('#fDob').value), given: titleCase($('#fGiven').value.trim()), surname: $('#fSurname').value.trim().toUpperCase(),
     postcode: fmtPostcode($('#fPostcode').value), phone: $('#fPhone').value.trim(), location: $('#fLocation').value, note: $('#fNote').value.trim(),
     address: form.ravs?.address || '', gp: form.ravs?.gp || '',
+    ...(offline ? offlineDetails() : {}),
+  };
+}
+// Offline registrations keep the extra details in existing fields: gender and email go in the note, marked so the export can split them out.
+function offlineDetails() {
+  const g = $('#fGender').value, e = $('#fEmail').value.trim(), extra = $('#fOffNote').value.trim(), desk = $('#fNote').value.trim();
+  return {
+    address: $('#fAddress').value.trim(), phone: $('#fOffPhone').value.trim() || $('#fPhone').value.trim(), vaxDate: $('#fVaxDate').value || todayIso(),
+    note: ['Offline registration', g && `Gender: ${g}`, e && `Email: ${e}`, extra, desk].filter(Boolean).join('. '),
   };
 }
 
@@ -1121,6 +1144,7 @@ function confirmPatient(checked) {
     if (!f.dob) errs.push('Enter the date of birth, it is needed for the age check.');
     if (f.nhs && !nhsValid(f.nhs)) errs.push('The NHS number is not valid. Check the digits.');
     if (!f.nhs && !(f.given && f.surname)) errs.push('Enter the NHS number, or first and last name.');
+    if (offline && !(f.given && f.surname)) errs.push('In offline mode, enter the first and last name.');
     if (errs.length) { form.findMsg = errs.join(' '); return renderFind(); }
     form.ravs = null;
   }
@@ -1138,7 +1162,11 @@ function renderFind() {
   const msg = form.findMsg ? `<div class="alert ${st === 'error' ? 'bad' : 'warn'}">${esc(form.findMsg)}</div>` : '';
   const skip = `<button type="button" class="btn ghost sm" data-findskip>Continue without checking RAVS</button>`;
   const kv = (k, v, cls = '') => `<div class="kv"><span class="k">${esc(k)}</span><span class="v ${cls}">${v}</span></div>`;
-  if (st === 'find' || st === 'error') {
+  $('#box1').classList.toggle('offline', offline); $('#offlineBtn').setAttribute('aria-pressed', String(offline)); $('#offlineNote').hidden = !offline || confirmed;
+  if (offline && !$('#fVaxDate').value) $('#fVaxDate').value = todayIso();
+  if ((st === 'find' || st === 'error') && offline) {
+    area.innerHTML = msg + '<div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-findskip>Continue</button></div>';
+  } else if (st === 'find' || st === 'error') {
     area.innerHTML = msg + (canSearch()
       ? `<div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-find>${st === 'error' ? 'Search again' : 'Search RAVS'}</button>${st === 'error' && EXT.ready && !verLt(EXT.version, '0.3.0') ? '<button type="button" class="btn" data-showravs>Show RAVS tab</button>' : ''}${skip}</div>${!EXT.ready ? '<p class="small muted" style="margin:0">Demo: RAVS answers are made up here. On your Macs the RAVS Helper looks the patient up in the RAVS tab.</p>' : ''}`
       : `<div class="alert info">The RAVS Helper isn't installed in Chrome on this computer, so the patient can't be checked on RAVS from here.</div><div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-findskip>Continue</button></div>`);
@@ -1180,10 +1208,10 @@ async function submitDesk(ev) {
   const f = readForm(); const errs = validateForm(f);
   if (mode === 'given' && !S.vaccinator) errs.push('Choose the vaccinator on duty first (Change, at the top).');
   if (errs.length) { $('#dupBox').innerHTML = `<div class="alert bad">${errs.map(esc).join('<br>')}</div>`; return; }
-  const visitId = uid(), now = new Date().toISOString(), t = todayIso(), time = nowTime(), given = mode === 'given';
+  const visitId = uid(), now = new Date().toISOString(), t = f.vaxDate || todayIso(), time = nowTime(), given = mode === 'given';
   const rows = form.vaccines.map(v => {
     const e = checkEligibility(v, f.dob, S), el = form.elig[v] || {};
-    return { id: uid(), visitId, date: t, time, source: form.source, nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone,
+    return { id: uid(), visitId, date: t, time, source: offline ? 'Offline' : form.source, nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone,
       address: f.address, gp: f.gp,
       vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S, v) : '', eligibility: VACCINES[v].private ? 'Private' : e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''), eligNote: el.note || '',
       consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? (isPriv(v) ? 'entered' : 'given') : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: given && isPriv(v) ? `${t} ${time}` : '', enteredBy: given && isPriv(v) ? PRIV_BY : '', note: f.note, updatedAt: now };
@@ -1415,6 +1443,7 @@ const EXPORT_COLS = [
   ['Eligibility', r => r.eligibility, 22], ['Detail', r => r.eligNote, 18], ['Consent', r => r.consent, 12], ['Injection site', r => r.site, 15],
   ['Vaccinator', r => r.vaccinator, 16], ['Desk', r => r.deskBy, 12], ['Location', r => r.location, 12], ['Booked or walk-in', r => r.source, 12],
   ['Status', r => isPriv(r) ? 'Private' : STATUS_LABEL[r.status] || r.status, 11], ['On RAVS at', r => isPriv(r) ? '' : (r.enteredAt || '').slice(11), 10], ['Entered by', r => isPriv(r) ? '' : r.enteredBy, 16],
+  ['Gender', r => (String(r.note || '').match(/Gender: ([^.]+)/) || [])[1] || '', 9], ['Email', r => (String(r.note || '').match(/Email: ([^ ]+?)\.?(?: |$)/) || [])[1] || '', 22],
   ['Price', r => isPriv(r) ? priceOf(r.vaccine) : '', 8], ['Note', r => r.note, 24],
 ];
 const XL_FILL = { flu: 'FFE3EDFA', covid: 'FFEFE7FA', priv: 'FFFBE6F0', other: 'FFE2F0EE', head: 'FF0A6464', day: 'FFF2F5F7', warn: 'FFFCF0DC' };
@@ -1650,6 +1679,7 @@ document.addEventListener('click', async ev => {
   if ('close' in d) return closeModal();
   if (b.id === 'pasteBtn') return openPaste();
   if (b.id === 'clearForm') return clearForm();
+  if (b.id === 'offlineBtn') { offline = !offline; store.set('psm.offline', offline); form.findMsg = ''; if (!['find', 'error'].includes(form.step)) clearForm(); return renderFind(); }
   if (b.id === 'exportBtn') return exportExcel();
   if (b.id === 'addProd') { S.products = readProducts().concat([{ vaccine: 'Flu', product: '', batch: '', expiry: '', active: true }]); renderProdTable(); }
 });
@@ -1691,7 +1721,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '20 Oct 2026, 11';
+const BUILD = '20 Oct 2026, 12';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
