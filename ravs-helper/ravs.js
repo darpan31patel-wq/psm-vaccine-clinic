@@ -11,7 +11,7 @@
   /* ---------- storage ---------- */
   const get = keys => new Promise(r => chrome.storage.local.get(keys, r));
   const set = obj => new Promise(r => chrome.storage.local.set(obj, r));
-  async function state() { return get({ queue: [], current: null, stage: null, startingAt: 0, paused: false, captured: {}, done: [], lookups: [] }); }
+  async function state() { return get({ queue: [], current: null, stage: null, startingAt: 0, paused: false, captured: {}, done: [], lookups: [], keptAliveAt: 0 }); }
   // Tells the app what a patient search is doing, so it never just spins.
   let lastStatus = '';
   function lookupStatus(job, text) {
@@ -364,7 +364,7 @@
     host.style.display = '';
     const final = step() === 'confirm' && job;
     b.innerHTML = (job ? `<div><div class="who">${esc(job.surname)}, ${esc(job.given)}</div><div class="sub">${job.lookup ? 'Patient search, nothing is recorded' : `${esc(job.vaccine)} · ${esc(String(job.product || '').replace(/^.*\(([^)]+)\)$/, '$1'))} · batch ${esc(job.batch)}`} · ${st.queue.length} in queue</div></div>`
-      : `<div class="sub">${st.queue.length ? st.queue.length + ' waiting' : looksLikeLogin() ? 'Log in to RAVS, then the helper is ready.' : 'Connected and ready. Patient searches and vaccinations from the clinic app appear here.'}</div>`) +
+      : `<div class="sub">${st.queue.length ? st.queue.length + ' waiting' : looksLikeLogin() ? 'Log in to RAVS, then the helper is ready.' : 'Connected and ready. Patient searches and vaccinations from the clinic app appear here.' + (st.keptAliveAt ? ` Kept logged in (last refreshed ${new Date(st.keptAliveAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}).` : '')}</div>`) +
       (message ? `<div class="m ${messageBad ? 'bad' : final ? 'final' : ''}">${esc(message)}</div>` : '') +
       `<div class="row">${st.paused ? '<button class="pri" id="resume">Resume</button>' : (st.queue.length ? '<button id="pause">Pause</button>' : '')}
        ${job ? '<button id="skip">Skip this one</button><button id="refill">Fill this page again</button>' : ''}${st.queue.length ? '<button id="clear">Clear queue</button>' : ''}</div>`;
@@ -378,6 +378,32 @@
 
   chrome.runtime.onMessage.addListener((msg, _s, reply) => { if (msg && msg.type === 'ping') reply({ login: looksLikeLogin() }); if (msg && msg.type === 'start-next') { lastKey = ''; state().then(st => (st.current ? run() : startNext())); reply({ ok: true }); } });
   chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.queue) state().then(st => { if (!st.current && st.queue.length && !st.paused) startNext(); else render(st); }); });
+
+  /* ---------- keep RAVS logged in ---------- */
+  // While the clinic app is open (7am to 8pm), refresh RAVS after 10 quiet minutes so it doesn't time out mid-clinic.
+  // Overnight, or with the app closed, RAVS times out as normal.
+  const IDLE_MS = 10 * 60 * 1000;
+  let lastActive = Date.now();
+  ['pointerdown', 'keydown', 'wheel'].forEach(t => addEventListener(t, () => { lastActive = Date.now(); }, true));
+  const stayButton = () => [...document.querySelectorAll('button, a, input[type=submit]')]
+    .find(b => /^(stay (signed|logged) in|continue (session|working)|extend (my )?session|keep me (signed|logged) in|i'?m still here)$/.test(norm(b.textContent || b.value)));
+  // A page staff could have typed on is fetched in the background instead of reloaded, so nothing they entered is lost.
+  const safeToReload = () => !document.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') &&
+    ![...document.querySelectorAll('input[type=text], input:not([type]), input[type=number], input[type=search], textarea')].some(el => el.value.trim());
+  async function keepAlive() {
+    const stay = stayButton();
+    if (stay) { stay.click(); lastActive = Date.now(); return set({ keptAliveAt: Date.now() }); }
+    if (Date.now() - lastActive < IDLE_MS || looksLikeLogin()) return;
+    const hour = new Date().getHours();
+    if (hour < 7 || hour >= 20) return;
+    const st = await get({ queue: [], current: null, appSeenAt: 0 });
+    if (st.current || st.queue.length || Date.now() - st.appSeenAt > 3 * 60 * 1000) return;
+    lastActive = Date.now();
+    await set({ keptAliveAt: Date.now() });
+    if (safeToReload()) location.reload();
+    else fetch(location.origin + '/', { credentials: 'include', cache: 'no-store' }).catch(() => {});
+  }
+  setInterval(keepAlive, 60 * 1000);
 
   // RAVS may change pages without a full reload, so watch for the URL or heading changing.
   let lastSeen = '';
