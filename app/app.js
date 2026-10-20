@@ -372,14 +372,17 @@ function renderAll(settingsChanged) {
   if (failed) showError(failed);
 }
 function renderMe() {
-  const people = [...new Set([...(S.staff || []), ...(S.vaccinators || [])])];
-  $('#meSel').innerHTML = (people.length ? '<option value="">Choose your name</option>' : '<option value="">No names yet: add them in Settings</option>') + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('');
+  // Operators come only from the Operators list in Settings; vaccinators are a separate list.
+  const people = [...new Set(S.staff || [])];
+  if (me && !people.includes(me)) { me = ''; store.set('psm.me', ''); }
+  const html = (people.length ? '<option value="">Choose your name</option>' : '<option value="">No names yet: add them in Settings</option>') + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('');
+  $('#meSel').innerHTML = html; $('#sOperator').innerHTML = html;
   $('#opBox').classList.toggle('empty', !me);
 }
 // Nothing can be entered until the operator box has a name. Trying anyway makes the box flash red.
 function flashOperator() {
   // No names set up yet: take them to Settings to add one.
-  if (!$$('#meSel option').some(o => o.value)) { showTab('settings'); toast('Add your name under Staff in Settings, press Save, then choose it in the Operator box.'); const st = $('#sStaff'); if (st) st.focus(); return; }
+  if (!$$('#meSel option').some(o => o.value)) { showTab('settings'); toast('Add your name under Operators in Settings, press Save, then choose it in the Operator box.'); const st = $('#sStaff'); if (st) st.focus(); return; }
   const box = $('#opBox'); box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
   window.scrollTo({ top: 0, behavior: 'smooth' }); $('#meSel').focus();
   toast('Choose the operator first (top right).');
@@ -1156,7 +1159,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.dataset.eligReason) { (form.elig[t.dataset.eligReason] ||= {}).reason = t.value; }
-  if (t.id === 'meSel') { me = t.value; store.set('psm.me', me); store.set('psm.meDay', todayIso()); $('#opBox').classList.toggle('empty', !me); $('#opBox').classList.remove('flash'); }
+  if (t.id === 'meSel' || t.id === 'sOperator') { me = t.value; $('#meSel').value = $('#sOperator').value = me; store.set('psm.me', me); store.set('psm.meDay', todayIso()); $('#opBox').classList.toggle('empty', !me); $('#opBox').classList.remove('flash'); }
   if (t.id === 'fLocation') { store.set('psm.loc', t.value); renderExtraSum(); }
 });
 document.addEventListener('input', ev => {
@@ -1191,7 +1194,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '20 Oct 2026, 14';
+const BUILD = '21 Oct 2026, 1';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
