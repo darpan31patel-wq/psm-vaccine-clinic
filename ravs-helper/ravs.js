@@ -35,6 +35,8 @@
   }
   function radios() { return [...document.querySelectorAll('input[type=radio]')].filter(r => !r.disabled); }
   function radioWhere(pred) { return radios().find(r => pred(labelText(r), r)); }
+  // RAVS shows user names as typed (e.g. lower case, a letter short), so match each word on its first letters.
+  const nameLike = (label, want) => { const ws = want.split(' ').filter(Boolean); return ws.length > 1 && ws.every(w => label.includes(w.slice(0, Math.max(3, Math.min(w.length, 5))))); };
   function radioLabel(text) { const t = norm(text); return radioWhere(l => l === t); }
   function setValue(el, v) {
     const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -79,7 +81,7 @@
       if (!/vaccination|history/i.test(h.textContent)) return;
       for (let el = h.nextElementSibling; el && !/^H[1-3]$/.test(el.tagName); el = el.nextElementSibling) out.push(el.innerText.trim());
     });
-    return out.filter(Boolean).join('\n').slice(0, 1500);
+    return out.filter(Boolean).join('\n').slice(0, 8000);
   }
   function fmtNhs(s) { s = String(s || '').replace(/\D/g, ''); return s.length === 10 ? `${s.slice(0, 3)} ${s.slice(3, 6)} ${s.slice(6)}` : s; }
   function todayIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
@@ -166,7 +168,7 @@
     async vaccinator(job) {
       const want = norm(job.vaccinator);
       if (!want) return { wait: 'Choose the vaccinator. The app has none set for this vaccination.' };
-      const r = radioWhere(l => l === want || l.startsWith(want + ' (') || l.includes('(' + want + ')') || l.includes(want));
+      const r = radioWhere(l => l === want || l.startsWith(want + ' (') || l.includes('(' + want + ')') || l.includes(want)) || radioWhere(l => nameLike(l, want));
       if (!choose(r)) return { wait: `Couldn't find "${job.vaccinator}" in the vaccinator list. Pick them, then press Continue.` };
       return { go: true };
     },
@@ -207,7 +209,7 @@
       const checks = [
         ['Vaccine', rows['vaccine'], v => norm(v).includes(norm(job.ravsVaccine === 'COVID-19' ? 'covid' : job.ravsVaccine))],
         ['Batch', rows['batch'], v => norm(v).replace(/\s/g, '').includes(norm(job.batch).replace(/\s/g, ''))],
-        ['Vaccinator', rows['vaccinator'], v => norm(v).includes(norm(job.vaccinator))],
+        ['Vaccinator', rows['vaccinator'], v => norm(v).includes(norm(job.vaccinator)) || nameLike(norm(v), norm(job.vaccinator))],
         ['Eligibility', rows['eligibility'], v => norm(v) === norm(job.eligibility)],
         ['Injection site', rows['injection site'], v => norm(v) === norm(job.site)],
         ['Date of birth', rows['date of birth'], v => longToIso(v) === job.dob],
