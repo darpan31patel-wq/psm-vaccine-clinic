@@ -85,6 +85,9 @@
     const ls = area === 'local' && ch.lookupStatus && ch.lookupStatus.newValue;
     if (ls && isApp()) window.postMessage({ psm: 'ext-lookup-status', id: ls.id, text: ls.text }, '*');
   });
+  // Lets the RAVS tab know the clinic app is open, so it keeps RAVS logged in only while it is.
+  const seen = () => { if (isApp()) chrome.storage.local.set({ appSeenAt: Date.now() }); };
+  seen(); setInterval(seen, 60 * 1000);
   announce();
   setTimeout(() => { announce(); sendDone(); sendLookups(); }, 1500);
 })();
