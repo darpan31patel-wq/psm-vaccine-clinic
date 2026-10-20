@@ -86,6 +86,19 @@
   function fmtNhs(s) { s = String(s || '').replace(/\D/g, ''); return s.length === 10 ? `${s.slice(0, 3)} ${s.slice(3, 6)} ${s.slice(6)}` : s; }
   function todayIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
+  // The names RAVS lists under "Who is the vaccinator?", spelt exactly as RAVS shows them, so the app can only use those.
+  async function saveVaccinators() {
+    const names = radios().map(r => {
+      const l = (r.id && document.querySelector(`label[for="${CSS.escape(r.id)}"]`)) || r.closest('label');
+      const t = String(l ? l.textContent : '').replace(/\s+/g, ' ').trim();
+      const me = t.match(/^Me \((.+)\)$/i);
+      return me ? me[1].trim() : t.replace(/\s*\([^)]*@[^)]*\)\s*$/, '').trim();
+    }).filter(Boolean);
+    if (!names.length) return;
+    const { ravsVaccinators } = await get({ ravsVaccinators: null });
+    if (!ravsVaccinators || JSON.stringify(ravsVaccinators.names) !== JSON.stringify(names)) await set({ ravsVaccinators: { names, at: new Date().toISOString() } });
+  }
+
   /* ---------- which page are we on ---------- */
   function step() {
     const p = path().split('/').pop(), h = h1();
@@ -166,6 +179,7 @@
       return { go: true };
     },
     async vaccinator(job) {
+      await saveVaccinators();
       const want = norm(job.vaccinator);
       if (!want) return { wait: 'Choose the vaccinator. The app has none set for this vaccination.' };
       const r = radioWhere(l => l === want || l.startsWith(want + ' (') || l.includes('(' + want + ')') || l.includes(want)) || radioWhere(l => nameLike(l, want));
@@ -215,6 +229,8 @@
         ['Date of birth', rows['date of birth'], v => longToIso(v) === job.dob],
       ];
       const bad = checks.filter(([, v, ok]) => v != null && !ok(v)).map(([k]) => k);
+      const note = document.querySelector('textarea');
+      if (note && job.note && !note.value) setValue(note, job.note);
       const btn = [...document.querySelectorAll('button, input[type=submit]')].find(b => /confirm and save/i.test(b.textContent || b.value || ''));
       if (btn && !btn.__psm) {
         btn.__psm = true;
@@ -246,6 +262,7 @@
   async function run() {
     if (busy) return; busy = true;
     try {
+      if (step() === 'vaccinator') await saveVaccinators();
       let st = await state();
       // A vaccination was just submitted: decide whether it saved.
       if (st.stage === 'submitted' && st.current) {

@@ -197,7 +197,9 @@ details.extra .fields { margin-top: 14px; }
 .chip.flu { border-color: color-mix(in srgb, var(--flu) 35%, var(--line)); }
 .chip.covid { border-color: color-mix(in srgb, var(--covid) 35%, var(--line)); }
 .chip.priv { border-color: color-mix(in srgb, var(--priv) 35%, var(--line)); }
-.donehead { display: flex; align-items: center; gap: 10px; margin: 18px 2px 0; }
+.dayhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 14px 2px 0; }
+.dayhead:first-child { margin-top: 0; }
+.dayhead h3 { margin: 0; font-size: 17px; }
 .donelist { padding-block: 6px; opacity: .92; }
 .donelist .row .nm { color: var(--muted); }
 
@@ -482,7 +484,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
     </div>
     <h3>People and places</h3>
     <div class="editgrid">
-      <div class="f"><label for="sVaccinators">Vaccinators (as named in RAVS), one per line</label><textarea id="sVaccinators" rows="4"></textarea></div>
+      <div class="f"><label for="sVaccinators">Vaccinators</label><div class="vaxpick" id="sVaxRavs"></div><textarea id="sVaccinators" rows="4"></textarea><span class="hint" id="sVaxHint"></span></div>
       <div class="f"><label for="sStaff">Desk staff, one per line</label><textarea id="sStaff" rows="4"></textarea></div>
       <div class="f"><label for="sLocations">Locations, one per line</label><textarea id="sLocations" rows="4"></textarea></div>
     </div>
@@ -612,6 +614,11 @@ function defaultProduct(vaccine, dobIso, S) {
 function batchFor(product, S) { const p = (S.products || []).find(p => p.product === product && p.active); return p ? p.batch : ''; }
 
 /* ===================== booking paste parser ===================== */
+// The day heading in a copied page ("Monday 19 October 2026"), so the date doesn't have to be picked by hand.
+function bookingsDate(text) {
+  const m = String(text).match(/\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})\b/);
+  return m ? parseDob(m[1]) : '';
+}
 function parseBookings(text, dateIso) {
   const out = [];
   const lines = String(text).replace(/\r/g, '').split('\n').map(l => l.replace(/\t+/g, ' | ').trim()).filter(Boolean);
@@ -636,7 +643,9 @@ function parseBookings(text, dateIso) {
     else if (/flu/.test(s)) vax.push('Flu');
     if (/covid/.test(s)) vax.push('COVID-19');
     const service = (svc.match(/(Flu and COVID[^|]*?(?:65\+|18 to 64)|Flu 65\+|Flu 18 to 64|Flu 2 to 3|COVID 18\+|COVID 12 to 17)/i) || [''])[0];
-    out.push({ time: tm[1], given: titleCase(given), surname: surname.toUpperCase(), nhs: nhs ? cleanNhs(nhs[1]) : '', dob, vaccines: vax.length ? vax : ['Flu'], service, date: dateIso });
+    const ph = svc.match(/(?:\+44\s?|0)7\d{3}\s?\d{6}\b/);
+    const phone = ph ? ph[0].replace(/\s/g, '').replace(/^\+44/, '0') : '';
+    out.push({ time: tm[1], given: titleCase(given), surname: surname.toUpperCase(), nhs: nhs ? cleanNhs(nhs[1]) : '', dob, phone, vaccines: vax.length ? vax : ['Flu'], service, date: dateIso });
   }
   return out;
 }
@@ -786,9 +795,21 @@ async function refresh(force) {
     if (b.unchanged) return;
     const sj = JSON.stringify(b.settings || {}), settingsChanged = sj !== refresh._sj; refresh._sj = sj;
     VERSION = b.version; S = Object.assign({}, DEFAULT_SETTINGS, b.settings || {}); ROWS = b.rows || []; DAYS = b.days || [];
+    await loadMore();
     renderAll(settingsChanged);
   } catch (e) { setSync(false, e); }
 }
+// The board only carries today and anything still to record. Other days the screens need (the bookings date picked,
+// and earlier days with patients still to record) are fetched separately.
+let MORE = [];
+async function loadMore() {
+  const t = todayIso(), bk = $('#bkDate').value || t;
+  const dates = [t, bk, ...ROWS.filter(r => r.status === 'given').map(r => r.date)].sort();
+  const from = dates[0], to = dates[dates.length - 1];
+  if (from === t && to === t) { MORE = []; return; }
+  try { MORE = (await API.exportRows(from, to)).filter(r => r.date !== t); } catch (e) { console.warn(e); MORE = []; }
+}
+function allRows() { const have = new Set(ROWS.map(r => r.id)); return ROWS.concat(MORE.filter(r => !have.has(r.id))); }
 function setSync(ok, e) { $('#syncDot').classList.toggle('off', !ok); $('#syncText').textContent = ok ? 'Live' : 'Offline, retrying'; if (!ok) console.warn(e); }
 
 function visits(rows) {
@@ -870,11 +891,15 @@ function renderDeskLists() {
 // Bookings tab: one date at a time. Each booking can fill Find patient, or be copied and pasted there.
 function renderBookings() {
   const date = $('#bkDate').value || ($('#bkDate').value = todayIso());
-  const vs = visits(ROWS.filter(r => r.date === date && (r.status === 'booked' || r.status === 'checkedin' || r.source === 'Booked'))).sort((a, b) => a[0].time.localeCompare(b[0].time));
+  const vs = visits(allRows().filter(r => r.date === date && (r.status === 'booked' || r.status === 'checkedin'))).sort((a, b) => a[0].time.localeCompare(b[0].time));
+  // A booking counts as registered once anyone with the same NHS number, or the same name and date of birth, is registered that day.
+  const reg = allRows().filter(x => x.date === date && !['booked', 'checkedin'].includes(x.status));
+  const norm = t => String(t || '').trim().toUpperCase();
+  const same = (a, x) => (a.nhs && x.nhs && a.nhs === x.nhs) || (a.dob === x.dob && norm(a.surname) === norm(x.surname));
   $('#bookedList').innerHTML = vs.length ? vs.map(v => {
-    const r = v[0], arrived = !v.every(x => x.status === 'booked');
+    const r = v[0], arrived = v.some(x => x.status === 'checkedin') || reg.some(x => same(r, x));
     return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div><div class="sub vx">${v.map(x => vaxTag(x)).join('')}</div></div>
-      <div class="right">${arrived ? '<span class="pill p-entered">Arrived</span>' : `<button type="button" class="btn sm ghost" data-copybk="${esc(r.visitId)}">Copy</button><button type="button" class="btn sm primary" data-checkin="${esc(r.visitId)}">Find patient</button>`}</div></div>`;
+      <div class="right">${arrived ? '<span class="pill p-entered">Registered</span>' : '<span class="pill p-booked">Booked</span>'}${arrived ? '' : `<button type="button" class="btn sm ghost" data-copybk="${esc(r.visitId)}">Copy</button><button type="button" class="btn sm primary" data-checkin="${esc(r.visitId)}">Find patient</button>`}</div></div>`;
   }).join('') : `<div class="empty">No bookings for ${esc(longDate(date))}. Use Paste bookings to bring them in.</div>`;
 }
 // One line with everything Find patient needs; pasting it into Find patient fills every box.
@@ -1098,7 +1123,7 @@ function checkDuplicates() {
   }, 350);
 }
 function checkInBooking(visitId) {
-  const v = ROWS.filter(r => r.visitId === visitId);
+  const v = allRows().filter(r => r.visitId === visitId);
   if (!v.length) return;
   const r = v[0];
   clearForm();
@@ -1206,13 +1231,16 @@ function renderTodo() {
   const late = pending.filter(r => r.date < todayIso()).length;
   setCount('#cTodo', pending.length).classList.toggle('hot', late > 0);
   const list = pending.filter(r => todoFilter === 'All' || targetOf(r) === todoFilter);
-  const groups = visits(list);
-  // Already recorded today stays at the bottom, so everyone vaccinated today is on one list.
-  const doneToday = visits(ROWS.filter(r => r.status === 'entered' && r.date === todayIso()))
-    .sort((a, b) => (b[0].enteredAt || '').localeCompare(a[0].enteredAt || ''));
-  $('#todoList').innerHTML = (groups.length ? groups.map(todoCard).join('') : '<div class="panel empty">Everything given has been recorded.</div>') +
-    (doneToday.length ? `<div class="donehead"><span class="pill p-entered">Recorded today</span><span class="muted small">${doneToday.length} patient${doneToday.length > 1 ? 's' : ''}</span></div>` +
-      `<div class="panel list donelist">${doneToday.map(doneRow).join('')}</div>` : '');
+  // One section per date (oldest first, today always shown): still to record, then that day's patients already recorded.
+  const dates = [...new Set(list.map(r => r.date).concat(todayIso()))].sort();
+  $('#todoList').innerHTML = dates.map(d => {
+    const todo = visits(list.filter(r => r.date === d));
+    const done = visits(allRows().filter(r => r.status === 'entered' && r.date === d)).sort((a, b) => (b[0].enteredAt || '').localeCompare(a[0].enteredAt || ''));
+    const age = daysBetween(d, todayIso());
+    return `<div class="dayhead"><h3>${d === todayIso() ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${todo.length} to record · ${done.length} recorded</span>${age > 0 && todo.length ? `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} ago · ${15 - age > 0 ? 15 - age + ' left to claim' : 'claim window passed'}</span>` : ''}</div>` +
+      (todo.length ? todo.map(todoCard).join('') : '<div class="panel empty">Everything given on this day has been recorded.</div>') +
+      (done.length ? `<div class="panel list donelist">${done.map(doneRow).join('')}</div>` : '');
+  }).join('');
   const ravsPending = pending.filter(r => targetOf(r) === 'RAVS');
   $('#fillAll').hidden = !EXT.ready || !ravsPending.length; $('#fillAll').textContent = `Fill all in RAVS (${ravsPending.length})`;
   $('#extNote').hidden = !EXT.ready; $('#extNote').textContent = `RAVS Helper is connected. It fills each RAVS page, you check the summary and press Confirm and save, and it's marked here automatically.`;
@@ -1225,7 +1253,7 @@ function doneRow(v) {
 function todoCard(v) {
   const r = v[0], open = openTodo.has(r.visitId);
   const age = daysBetween(r.date, todayIso()), left = 15 - age;
-  const tag = age === 0 ? '' : `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} late · ${left > 0 ? left + ' left to claim' : 'claim window passed'}</span>`;
+  const tag = ''; // the date heading above shows how late it is
   const copyVal = (v, show, mono) => v ? `<button class="copy ${mono ? 'mono' : ''}" type="button" data-copy="${esc(v)}">${esc(show || v)}</button>` : '<span class="muted">–</span>';
   const kv = (k, val) => `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${val}</span></div>`;
   const pickVal = val => val ? `${esc(val)}<span class="pick">pick</span>` : '<span class="muted">–</span>';
@@ -1288,6 +1316,13 @@ function renderSettings() {
   const opt = (list, cur) => list.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
   $('#sVaccinator').innerHTML = '<option value=""></option>' + opt(S.vaccinators || [], S.vaccinator);
   $('#sSite').innerHTML = opt(SITES, S.site); $('#sConsent').innerHTML = opt(CONSENTS, S.consent);
+  // Once the helper has read RAVS's "Who is the vaccinator?" page, names can only be picked from RAVS, never typed.
+  const fromRavs = (S.ravsVaccinators || []).length > 0;
+  $('#sVaccinators').hidden = fromRavs;
+  $('#sVaxRavs').hidden = !fromRavs;
+  $('#sVaxRavs').innerHTML = (S.ravsVaccinators || []).map(n => `<button type="button" class="chip small" data-ravsvax="${esc(n)}" aria-pressed="${(S.vaccinators || []).includes(n)}">${esc(n)}</button>`).join('');
+  $('#sVaxHint').textContent = fromRavs ? `Names as RAVS shows them (read ${S.ravsVaccinatorsAt ? ukDate(S.ravsVaccinatorsAt.slice(0, 10)) : ''}). Tap to choose who vaccinates here.`
+    : "One per line, exactly as RAVS shows them under \"Who is the vaccinator?\". After the RAVS Helper has been on that page once, this becomes a list from RAVS and can't be mistyped.";
   $('#sVaccinators').value = (S.vaccinators || []).join('\n'); $('#sStaff').value = (S.staff || []).join('\n'); $('#sLocations').value = (S.locations || []).join('\n');
   $('#sFluAge').value = S.fluAge; $('#sFluDate').value = S.fluDate; $('#sCovAge').value = S.covAge; $('#sCovDate').value = S.covDate; $('#sSeason').value = S.seasonStart; $('#sNasalFrom').value = S.nasalFrom; $('#sNasalTo').value = S.nasalTo;
   renderProdTable();
@@ -1305,7 +1340,7 @@ function readProducts() {
 async function saveSettings(ev) {
   ev.preventDefault();
   const lines = id => $(id).value.split('\n').map(s => s.trim()).filter(Boolean);
-  const s = Object.assign({}, S, { products: readProducts(), vaccinators: lines('#sVaccinators'), staff: lines('#sStaff'), locations: lines('#sLocations'),
+  const s = Object.assign({}, S, { products: readProducts(), vaccinators: (S.ravsVaccinators || []).length ? $$('#sVaxRavs [aria-pressed="true"]').map(b => b.dataset.ravsvax) : lines('#sVaccinators'), staff: lines('#sStaff'), locations: lines('#sLocations'),
     vaccinator: $('#sVaccinator').value, site: $('#sSite').value, consent: $('#sConsent').value,
     fluAge: +$('#sFluAge').value, fluDate: $('#sFluDate').value, covAge: +$('#sCovAge').value, covDate: $('#sCovDate').value, seasonStart: $('#sSeason').value, nasalFrom: $('#sNasalFrom').value, nasalTo: $('#sNasalTo').value });
   if (!s.vaccinators.includes(s.vaccinator)) s.vaccinator = s.vaccinators[0] || '';
@@ -1317,7 +1352,7 @@ function openModal(html) { $('#modalHost').innerHTML = `<div class="scrim" data-
 function closeModal() { $('#modalHost').innerHTML = ''; }
 function openPaste() {
   openModal(`<h2>Paste bookings</h2>
-    <p class="small muted">In Manage your appointments, open the day view for today, select the whole appointments table (from the first time to the last row), copy, and paste it here. Nothing is read from the website directly.</p>
+    <p class="small muted">In Manage your appointments, open the day, select everything from the date heading to the last appointment (or press Cmd+A), copy, and paste it here. The date is picked up from the page. Nothing is read from the website directly.</p>
     <div class="editgrid"><div class="f"><label for="pDate">Appointments are for</label><input type="date" id="pDate" value="${$('#bkDate').value || todayIso()}"></div></div>
     <textarea id="pText" placeholder="09:06	SURNAME FIRSTNAME 1234567890	18 May 1957	07…	Flu 65+	Cancel"></textarea>
     <div id="pPrev"></div>
@@ -1328,10 +1363,10 @@ function openPaste() {
     $('#pPrev').innerHTML = list.length ? `<p class="small"><b>${list.length} appointments found.</b> Check a few before adding.</p><div class="tablewrap" style="max-height:240px"><table><thead><tr><th>Time</th><th>Name</th><th>NHS number</th><th>DOB</th><th>Vaccines</th></tr></thead><tbody>${list.map(b => `<tr><td class="mono">${esc(b.time)}</td><td>${esc(b.surname)}, ${esc(b.given)}</td><td class="mono">${esc(fmtNhs(b.nhs))}</td><td class="mono">${esc(ukDate(b.dob))}</td><td>${esc(b.vaccines.join(' + '))}</td></tr>`).join('')}</tbody></table></div>` : ($('#pText').value.trim() ? '<div class="alert warn">No appointments recognised yet. Make sure the copy includes the time, name, NHS number and date of birth columns.</div>' : '');
     return list;
   };
-  $('#pText').addEventListener('input', prev); $('#pDate').addEventListener('change', prev);
+  $('#pText').addEventListener('input', () => { const d = bookingsDate($('#pText').value); if (d) $('#pDate').value = d; prev(); }); $('#pDate').addEventListener('change', prev);
   $('#pImport').onclick = async () => {
     const list = prev(); const now = new Date().toISOString();
-    const rows = []; list.forEach(b => { const visitId = uid(); b.vaccines.forEach(v => rows.push({ id: uid(), visitId, date: b.date, time: b.time, source: 'Booked', nhs: b.nhs, surname: b.surname, given: b.given, dob: b.dob, postcode: '', phone: '', vaccine: v, product: defaultProduct(v, b.dob, S), batch: '', eligibility: '', eligNote: '', consent: S.consent, site: S.site, vaccinator: '', deskBy: me, location: 'Pharmacy', status: 'booked', givenAt: '', enteredAt: '', enteredBy: '', note: b.service, updatedAt: now })); });
+    const rows = []; list.forEach(b => { const visitId = uid(); b.vaccines.forEach(v => rows.push({ id: uid(), visitId, date: b.date, time: b.time, source: 'Booked', nhs: b.nhs, surname: b.surname, given: b.given, dob: b.dob, postcode: '', phone: b.phone || '', vaccine: v, product: defaultProduct(v, b.dob, S), batch: '', eligibility: '', eligNote: '', consent: S.consent, site: S.site, vaccinator: '', deskBy: me, location: 'Pharmacy', status: 'booked', givenAt: '', enteredAt: '', enteredBy: '', note: b.service, updatedAt: now })); });
     $('#bkDate').value = $('#pDate').value;
     const res = await API.importBookings(rows); closeModal(); toast(`${res.added} bookings added${list.length - res.added ? `, ${list.length - res.added} were already in` : ''}`); await refresh(true);
   };
@@ -1379,7 +1414,8 @@ document.addEventListener('click', async ev => {
   if ('morevax' in d) { showMoreVax = true; return renderDeskForm(); }
   if (d.toggleTodo) { openTodo.has(d.toggleTodo) ? openTodo.delete(d.toggleTodo) : openTodo.add(d.toggleTodo); return renderTodo(); }
   if (d.checkin) return checkInBooking(d.checkin);
-  if (d.copybk) { const r = ROWS.find(x => x.visitId === d.copybk); if (r) copyText(bookingText(r), b); return; }
+  if (d.ravsvax) { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); return; }
+  if (d.copybk) { const r = allRows().find(x => x.visitId === d.copybk); if (r) copyText(bookingText(r), b); return; }
   if (d.give) return giveVisit(d.give);
   if (d.notgiven) return openNotGiven(d.notgiven);
   if (d.edit) { editing = d.edit; return renderVax(); }
@@ -1433,13 +1469,13 @@ $('#fPostcode').addEventListener('blur', () => { $('#fPostcode').value = fmtPost
   onNhsInput(); onDobInput(); checkDuplicates();
   toast('Patient details pasted. Press Search RAVS.');
 }));
-$('#bkDate').addEventListener('change', renderBookings);
+$('#bkDate').addEventListener('change', async () => { await loadMore(); renderBookings(); });
 $('#deskForm').addEventListener('submit', submitDesk);
 $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '20 Oct 2026, 7';
+const BUILD = '20 Oct 2026, 8';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
@@ -1472,10 +1508,21 @@ function checkRavs() {
     toast(renderRavs());
   }, 2500);
 }
+// RAVS's own vaccinator names replace typed ones; a typed name close to a RAVS name (case, a letter short) takes the RAVS spelling.
+async function onRavsVaccinators(names, at) {
+  if (JSON.stringify(names) === JSON.stringify(S.ravsVaccinators || [])) return;
+  const low = t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const close = (a, b) => { const ws = low(a).split(' '); return low(a) === low(b) || (ws.length > 1 && ws.every(w => low(b).includes(w.slice(0, Math.max(3, Math.min(w.length, 5)))))); };
+  const pick = n => names.find(x => x === n) || names.find(x => close(n, x));
+  const vaccinators = [...new Set((S.vaccinators || []).map(pick).filter(Boolean))];
+  const s = Object.assign({}, S, { ravsVaccinators: names, ravsVaccinatorsAt: at || new Date().toISOString(), vaccinators, vaccinator: pick(S.vaccinator) || vaccinators[0] || '' });
+  await API.saveSettings(s); await refresh(true);
+  toast('Vaccinator names updated from RAVS. Check them in Settings.');
+}
 function ravsJob(r) {
   return { id: r.id, visitId: r.visitId, nhs: r.nhs, given: r.given, surname: r.surname, dob: r.dob, postcode: r.postcode, date: r.date,
     vaccine: r.vaccine, ravsVaccine: VACCINES[r.vaccine]?.ravs || r.vaccine, product: r.product, batch: r.batch, vaccinator: r.vaccinator,
-    eligibility: r.eligibility, consent: r.consent, site: r.site };
+    eligibility: r.eligibility, consent: r.consent, site: r.site, note: r.note || '' };
 }
 function sendToRavs(rows) {
   const bad = rows.filter(r => !r.batch || !r.vaccinator || !r.eligibility);
@@ -1497,6 +1544,7 @@ window.addEventListener('message', async ev => {
   if (d.psm === 'ext-lookup-started' && d.id === form.lookupId) { form.lookupStarted = true; if (d.status) { form.findStatus = d.status; renderFind(); } }
   if (d.psm === 'ext-lookup-status' && d.id === form.lookupId && form.step === 'searching') { form.lookupStarted = form.lookupHeard = true; form.findStatus = d.text || ''; renderFind(); }
   if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }
+  if (d.psm === 'ext-vaccinators' && Array.isArray(d.names) && d.names.length) onRavsVaccinators(d.names, d.at);
   if (d.psm === 'ext-queued') toast(`${d.added} sent to RAVS Helper (${d.total} in its queue)`);
   if (d.psm === 'ext-done' && Array.isArray(d.results) && d.results.length) {
     const changes = d.results.map(x => {
