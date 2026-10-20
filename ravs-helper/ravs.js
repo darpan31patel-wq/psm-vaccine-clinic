@@ -11,7 +11,15 @@
   /* ---------- storage ---------- */
   const get = keys => new Promise(r => chrome.storage.local.get(keys, r));
   const set = obj => new Promise(r => chrome.storage.local.set(obj, r));
-  async function state() { return get({ queue: [], current: null, stage: null, paused: false, captured: {}, done: [], lookups: [] }); }
+  async function state() { return get({ queue: [], current: null, stage: null, startingAt: 0, paused: false, captured: {}, done: [], lookups: [] }); }
+  // Tells the app what a patient search is doing, so it never just spins.
+  let lastStatus = '';
+  function lookupStatus(job, text) {
+    if (!job || !job.lookup || lastStatus === job.id + text) return;
+    lastStatus = job.id + text; set({ lookupStatus: { id: job.id, text, at: Date.now() } });
+  }
+  const STATUS = { start: 'Opening Record vaccinations on RAVS', nhs: 'Entering the NHS number on RAVS', search: 'Entering the name and date of birth on RAVS', history: 'Reading the patient details' };
+  const LOGIN_MSG = 'RAVS needs you to log in. Open the RAVS tab in Chrome, log in, then search again.';
 
   /* ---------- page helpers ---------- */
   const norm = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -48,6 +56,7 @@
     const btns = [...document.querySelectorAll('main button, main input[type=submit], form button, form input[type=submit]')];
     return btns.find(b => /^(continue|search)$/i.test((b.textContent || b.value || '').trim())) || null;
   }
+  function looksLikeLogin() { return !!document.querySelector('input[type=password]') || /\b(log ?in|sign ?in)\b/.test(h1() + ' ' + norm(document.title)); }
   function hasError() { return !!document.querySelector('.nhsuk-error-summary, [role=alert].nhsuk-error-summary, .govuk-error-summary'); }
   function ukDateParts(iso) { const [y, m, d] = iso.split('-'); return { d: String(+d), m: String(+m), y }; }
   function longToIso(s) {
@@ -98,9 +107,10 @@
 
   /* ---------- handlers: return {go:true} to press Continue, or {wait:'message'} ---------- */
   const H = {
-    async start() {
+    async start(job) {
       const a = [...document.querySelectorAll('main a, main button')].find(x => /record (a )?vaccination|start/i.test(x.textContent));
       if (a) { a.click(); return { done: true }; }
+      if (job.lookup) return finishLookup(job, { ok: false, error: `RAVS is showing a page the helper doesn't recognise ("${h1() || 'no heading'}"). Look at the RAVS tab, then search again.` });
       return { wait: 'Open the first Record vaccinations page to begin.' };
     },
     async nhs(job) {
@@ -211,6 +221,7 @@
       return { wait: bad.length ? `Check these before saving: ${bad.join(', ')}.` : 'Everything matches the app. Check the page, then press Confirm and save.', bad: bad.length > 0, final: true };
     },
     async unknown(job) {
+      if (job.lookup && looksLikeLogin()) return finishLookup(job, { ok: false, error: LOGIN_MSG });
       if (job.lookup) return finishLookup(job, { ok: false, error: `RAVS showed a page the helper doesn't recognise ("${h1() || 'no heading'}"). Check the RAVS tab: you may need to log in, or pick the patient there.` });
       return { wait: 'Your turn on this page. The helper carries on from the next page it recognises.' }; },
   };
@@ -254,15 +265,27 @@
       if (!st.current && st.queue.length && !st.paused) return startNext();
       const job = st.queue.find(j => j.id === st.current);
       if (!job || st.paused) return render(st);
+      if (looksLikeLogin()) {
+        if (job.lookup) return finishLookup(job, { ok: false, error: LOGIN_MSG });
+        message = 'Log in to RAVS. The helper carries on once you are in.'; messageBad = true; return render(st);
+      }
       if (st.stage === 'starting') {
         const s0 = step();
-        if (!((s0 === 'nhs' && !hasError()) || s0 === 'start')) return render(st);
+        if (!((s0 === 'nhs' && !hasError()) || s0 === 'start')) {
+          // Waiting for a new record to open. A search gives up with a reason rather than waiting for ever.
+          if (job.lookup && s0 === 'unknown' && Date.now() - (st.startingAt || 0) > 15000) {
+            return finishLookup(job, { ok: false, error: `RAVS is showing a page the helper doesn't recognise ("${h1() || 'no heading'}"). Look at the RAVS tab, then search again.` });
+          }
+          lookupStatus(job, STATUS.start); setTimeout(run, 3000);
+          return render(st);
+        }
         await set({ stage: null });
       }
       const s = step();
       const key = `${job.id}|${s}|${path()}|${h1()}|${hasError()}`;
       if (key === lastKey) return render(st);
       lastKey = key;
+      if (STATUS[s]) lookupStatus(job, STATUS[s]);
       if (job.lookup && hasError()) {
         const err = (document.querySelector('.nhsuk-error-summary, .govuk-error-summary') || {}).innerText || '';
         return finishLookup(job, { ok: false, error: 'RAVS could not find this patient. ' + err.replace(/^there is a problem\s*/i, '').replace(/\s+/g, ' ').trim() });
@@ -289,7 +312,7 @@
     const s = step();
     if (s === 'nhs' && !hasError()) { await set({ current: next.id, stage: null }); busy = false; return run(); }
     // Until the first page of a new record loads, ignore the page that is still showing (it may be the last patient's).
-    await set({ current: next.id, stage: 'starting' });
+    await set({ current: next.id, stage: 'starting', startingAt: Date.now() });
     const nav = [...document.querySelectorAll('a')].find(a => /record vaccinations/i.test(a.textContent));
     if (nav) nav.click(); else location.href = location.origin + '/record-vaccinations';
     setTimeout(run, 1200);
