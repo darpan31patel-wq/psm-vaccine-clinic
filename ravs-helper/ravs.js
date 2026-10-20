@@ -268,13 +268,17 @@
       if (st.stage === 'submitted' && st.current) {
         if (step() === 'confirm' || hasError()) {
           if (hasError()) { await set({ stage: null }); message = 'RAVS showed a problem. Fix it and press Confirm and save again.'; messageBad = true; }
+        } else if (!/vaccination saved/.test(norm(document.body.innerText))) {
+          // Only RAVS's own "Vaccination saved" message counts. Give the page a few seconds to show it.
+          if (Date.now() - (st.submittedAt || 0) < 8000) { clearTimeout(run._w); run._w = setTimeout(run, 1000); }
+          else { message = 'RAVS moved on without showing "Vaccination saved". Check Records in RAVS for this patient. It stays on To record in the app until you mark it.'; messageBad = true; }
         } else {
           const job = st.queue.find(j => j.id === st.current);
           const cap = st.captured[st.current] || {};
           const done = st.done.concat([{ id: st.current, at: new Date().toISOString(), address: cap.address || '', gp: cap.gp || '', nhs: cap.nhs || '' }]);
           const captured = Object.assign({}, st.captured); delete captured[st.current];
           await set({ done, captured, queue: st.queue.filter(j => j.id !== st.current), current: null, stage: null });
-          message = job ? `Saved ${job.given} ${job.surname} (${job.vaccine}). The app will mark it as recorded.` : 'Saved.'; messageBad = false;
+          message = job ? `RAVS says "Vaccination saved" for ${job.given} ${job.surname} (${job.vaccine}). Marked as recorded in the app.` : 'Saved.'; messageBad = false;
           st = await state();
           lastKey = '';
           if (st.queue.length && !st.paused) { await sleep(800); return startNext(); }
