@@ -11,7 +11,7 @@
   /* ---------- storage ---------- */
   const get = keys => new Promise(r => chrome.storage.local.get(keys, r));
   const set = obj => new Promise(r => chrome.storage.local.set(obj, r));
-  async function state() { return get({ queue: [], current: null, stage: null, paused: false, captured: {}, done: [] }); }
+  async function state() { return get({ queue: [], current: null, stage: null, paused: false, captured: {}, done: [], lookups: [] }); }
 
   /* ---------- page helpers ---------- */
   const norm = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -63,6 +63,15 @@
     });
     return out;
   }
+  // Text under any "vaccination history" style heading on the patient page, so the desk can see past doses.
+  function historyText() {
+    const out = [];
+    document.querySelectorAll('main h2, main h3').forEach(h => {
+      if (!/vaccination|history/i.test(h.textContent)) return;
+      for (let el = h.nextElementSibling; el && !/^H[1-3]$/.test(el.tagName); el = el.nextElementSibling) out.push(el.innerText.trim());
+    });
+    return out.filter(Boolean).join('\n').slice(0, 1500);
+  }
   function fmtNhs(s) { s = String(s || '').replace(/\D/g, ''); return s.length === 10 ? `${s.slice(0, 3)} ${s.slice(3, 6)} ${s.slice(6)}` : s; }
   function todayIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
@@ -110,6 +119,12 @@
     },
     async history(job, st) {
       const rows = summaryRows();
+      if (job.lookup) {
+        return finishLookup(job, { ok: true, patient: {
+          name: (rows['name'] || '').split('\n')[0], dob: longToIso(rows['date of birth'] || ''), nhs: String(rows['nhs number'] || '').replace(/\D/g, ''),
+          address: (rows['address'] || '').replace(/,?\s*\n\s*/g, ', '), gp: (rows['registered gp'] || '').replace(/\s*\n\s*/g, ', '), history: historyText(),
+        } });
+      }
       const pageNhs = String(rows['nhs number'] || '').replace(/\D/g, '');
       const pageDob = longToIso(rows['date of birth'] || '');
       const problems = [];
@@ -195,8 +210,22 @@
       }
       return { wait: bad.length ? `Check these before saving: ${bad.join(', ')}.` : 'Everything matches the app. Check the page, then press Confirm and save.', bad: bad.length > 0, final: true };
     },
-    async unknown() { return { wait: 'Your turn on this page. The helper carries on from the next page it recognises.' }; },
+    async unknown(job) {
+      if (job.lookup) return finishLookup(job, { ok: false, error: `RAVS showed a page the helper doesn't recognise ("${h1() || 'no heading'}"). Check the RAVS tab: you may need to log in, or pick the patient there.` });
+      return { wait: 'Your turn on this page. The helper carries on from the next page it recognises.' }; },
   };
+
+  // A patient search stops on the patient's details page: nothing is recorded. The result goes back to the app.
+  async function finishLookup(job, result) {
+    const st = await state();
+    const lookups = st.lookups.filter(x => x.id !== job.id).concat([Object.assign({ id: job.id, at: new Date().toISOString() }, result)]);
+    await set({ lookups, queue: st.queue.filter(j => j.id !== job.id), current: null, stage: null });
+    message = result.ok ? `Found ${result.patient.name || 'the patient'}. Details sent to the app to confirm.` : 'Patient search stopped. The app shows why.';
+    messageBad = !result.ok; lastKey = '';
+    const now = await state();
+    if (now.queue.length && !now.paused) setTimeout(startNext, 800); else render(now);
+    return { done: true };
+  }
 
   /* ---------- main loop ---------- */
   let lastKey = '', busy = false, message = '', messageBad = false;
@@ -225,12 +254,22 @@
       if (!st.current && st.queue.length && !st.paused) return startNext();
       const job = st.queue.find(j => j.id === st.current);
       if (!job || st.paused) return render(st);
+      if (st.stage === 'starting') {
+        const s0 = step();
+        if (!((s0 === 'nhs' && !hasError()) || s0 === 'start')) return render(st);
+        await set({ stage: null });
+      }
       const s = step();
       const key = `${job.id}|${s}|${path()}|${h1()}|${hasError()}`;
       if (key === lastKey) return render(st);
       lastKey = key;
+      if (job.lookup && hasError()) {
+        const err = (document.querySelector('.nhsuk-error-summary, .govuk-error-summary') || {}).innerText || '';
+        return finishLookup(job, { ok: false, error: 'RAVS could not find this patient. ' + err.replace(/^there is a problem\s*/i, '').replace(/\s+/g, ' ').trim() });
+      }
       if (hasError() && s !== 'confirm') { message = 'RAVS showed a problem on this page. Fix it, then press Continue.'; messageBad = true; return render(st); }
       const res = await H[s](job, st);
+      if (res.done) return;
       if (res.wait) { message = res.wait; messageBad = !!res.bad; return render(st); }
       message = `Filled: ${s === 'nhs' ? 'NHS number' : s}`; messageBad = false; render(st);
       if (res.go && !st.paused) {
@@ -246,10 +285,11 @@
     const st = await state();
     const next = st.queue[0];
     if (!next) return render(st);
-    await set({ current: next.id, stage: null });
-    lastKey = ''; message = `Starting ${next.given} ${next.surname} (${next.vaccine})`; messageBad = false;
+    lastKey = ''; message = `Starting ${next.given || ''} ${next.surname || ''} (${next.vaccine})`; messageBad = false;
     const s = step();
-    if (s === 'nhs') { busy = false; return run(); }
+    if (s === 'nhs' && !hasError()) { await set({ current: next.id, stage: null }); busy = false; return run(); }
+    // Until the first page of a new record loads, ignore the page that is still showing (it may be the last patient's).
+    await set({ current: next.id, stage: 'starting' });
     const nav = [...document.querySelectorAll('a')].find(a => /record vaccinations/i.test(a.textContent));
     if (nav) nav.click(); else location.href = location.origin + '/record-vaccinations';
     setTimeout(run, 1200);
@@ -277,7 +317,7 @@
     const esc = s => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     host.style.display = (st.queue.length || message) ? '' : 'none';
     const final = step() === 'confirm' && job;
-    b.innerHTML = (job ? `<div><div class="who">${esc(job.surname)}, ${esc(job.given)}</div><div class="sub">${esc(job.vaccine)} · ${esc(job.product.replace(/^.*\(([^)]+)\)$/, '$1'))} · batch ${esc(job.batch)} · ${st.queue.length} in queue</div></div>`
+    b.innerHTML = (job ? `<div><div class="who">${esc(job.surname)}, ${esc(job.given)}</div><div class="sub">${job.lookup ? 'Patient search, nothing is recorded' : `${esc(job.vaccine)} · ${esc(String(job.product || '').replace(/^.*\(([^)]+)\)$/, '$1'))} · batch ${esc(job.batch)}`} · ${st.queue.length} in queue</div></div>`
       : `<div class="sub">${st.queue.length ? st.queue.length + ' waiting' : 'Nothing waiting. Send vaccinations from the To record tab in the app.'}</div>`) +
       (message ? `<div class="m ${messageBad ? 'bad' : final ? 'final' : ''}">${esc(message)}</div>` : '') +
       `<div class="row">${st.paused ? '<button class="pri" id="resume">Resume</button>' : (st.queue.length ? '<button id="pause">Pause</button>' : '')}

@@ -2,7 +2,7 @@
 
 The RAVS Helper is a small Chrome add-on. It fills in each Record a vaccination (RAVS) page from the clinic app, one vaccination at a time. It never presses **Confirm and save**. A person always checks the summary page and presses it.
 
-Install it on the Mac or Macs used for RAVS entries. It takes about 2 minutes per Mac.
+Install it on the front-desk Mac (for **Search RAVS**) and on the Mac used for RAVS entries. It takes about 2 minutes per Mac. Each of those Macs also needs RAVS logged in, in a Chrome tab.
 
 ## Install
 
@@ -35,6 +35,10 @@ The panel in the bottom-right corner of RAVS has these buttons:
 - **Skip this one:** leave it for later. It stays on the app's To record list.
 - **Fill this page again:** use this if a page didn't fill.
 - **Clear queue:** empty the helper's list.
+
+## Searching for a patient from the Clinic screen
+
+When the desk presses **Search RAVS**, the helper uses the RAVS tab in the background. It enters the NHS number (or name, date of birth and postcode), stops on the patient's details page and sends those details back to the app. Nothing is recorded in RAVS. If RAVS can't find the patient, or isn't logged in, the app says so.
 
 ## When it stops and asks you
 

@@ -5,6 +5,12 @@
   const isApp = () => !!document.getElementById('psm-clinic-app');
 
   function announce() { if (isApp()) window.postMessage({ psm: 'ext-ready', version: chrome.runtime.getManifest().version }, '*'); }
+  function sendLookups() {
+    if (!isApp()) return;
+    chrome.storage.local.get({ lookups: [] }, ({ lookups }) => {
+      if (lookups.length) window.postMessage({ psm: 'ext-lookup', results: lookups }, '*');
+    });
+  }
   function sendDone() {
     if (!isApp()) return;
     chrome.storage.local.get({ done: [] }, ({ done }) => {
@@ -15,7 +21,27 @@
   window.addEventListener('message', ev => {
     if (ev.source !== window || !ev.data || !isApp()) return;
     const d = ev.data;
-    if (d.psm === 'app-hello') { announce(); sendDone(); }
+    if (d.psm === 'app-hello') { announce(); sendDone(); sendLookups(); }
+    // A patient search: goes ahead of waiting vaccinations, but never interrupts one already being filled.
+    if (d.psm === 'app-lookup' && d.job && d.job.id) {
+      chrome.storage.local.get({ queue: [], current: null }, ({ queue, current }) => {
+        const job = Object.assign({}, d.job, { lookup: true, vaccine: 'Patient search' });
+        const rest = queue.filter(j => j.id !== job.id && !j.lookup);
+        const at = current ? rest.findIndex(j => j.id === current) + 1 : 0;
+        rest.splice(at, 0, job);
+        chrome.storage.local.set({ queue: rest, paused: false }, () => chrome.runtime.sendMessage({ type: 'open-ravs', focus: false }));
+      });
+    }
+    if (d.psm === 'app-lookup-cancel' && d.id) {
+      chrome.storage.local.get({ queue: [], current: null }, ({ queue, current }) => {
+        chrome.storage.local.set(Object.assign({ queue: queue.filter(j => j.id !== d.id) }, current === d.id ? { current: null, stage: null } : {}));
+      });
+    }
+    if (d.psm === 'app-lookup-ack' && Array.isArray(d.ids)) {
+      chrome.storage.local.get({ lookups: [] }, ({ lookups }) => {
+        chrome.storage.local.set({ lookups: lookups.filter(x => !d.ids.includes(x.id)) });
+      });
+    }
     if (d.psm === 'app-queue' && Array.isArray(d.jobs)) {
       chrome.storage.local.get({ queue: [] }, ({ queue }) => {
         const have = new Set(queue.map(j => j.id));
@@ -32,7 +58,7 @@
       });
     }
   });
-  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); });
+  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); if (area === 'local' && ch.lookups) sendLookups(); });
   announce();
-  setTimeout(() => { announce(); sendDone(); }, 1500);
+  setTimeout(() => { announce(); sendDone(); sendLookups(); }, 1500);
 })();
