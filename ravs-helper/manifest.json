@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PSM RAVS Helper",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Fills in Record a vaccination (RAVS) pages from the PSM Vaccine Clinic app. Staff check every page and press Confirm and save themselves.",
   "permissions": ["storage"],
   "host_permissions": ["https://ravs.england.nhs.uk/*", "https://www.ravs.england.nhs.uk/*"],

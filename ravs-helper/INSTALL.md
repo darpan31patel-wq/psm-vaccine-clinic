@@ -58,3 +58,5 @@ When the desk presses **Search RAVS**, the helper uses the RAVS tab in the backg
 ## Updating
 
 When I send a new version, unzip it over the same folder. Then press the reload arrow on **PSM RAVS Helper** in `chrome://extensions`.
+
+After updating, reload any RAVS tab that is already open (click it and press Cmd+R), and reload the clinic app too. Chrome only starts the new helper in pages opened or reloaded after the update.

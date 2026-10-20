@@ -814,14 +814,25 @@ function findErrors(f) {
 function startFind() {
   const f = readForm(), errs = findErrors(f);
   if (errs.length) { form.step = 'find'; form.findMsg = errs.join(' '); return renderFind(); }
-  form.lookupId = 'lk' + uid(); form.step = 'searching'; form.findMsg = ''; renderFind();
+  if (EXT.ready && verLt(EXT.version, '0.2.0')) {
+    form.step = 'error'; form.findMsg = `The RAVS Helper on this computer is an old version (${EXT.version || 'unknown'}) that can't search RAVS. Update it, then search again.`; return renderFind();
+  }
+  form.lookupId = 'lk' + uid(); form.step = 'searching'; form.findMsg = ''; form.findStatus = ''; form.lookupStarted = false; form.lookupHeard = false; renderFind();
   const job = { id: form.lookupId, nhs: f.nhs, given: f.given, surname: f.surname, dob: f.dob, postcode: f.postcode };
-  clearTimeout(startFind._t);
-  startFind._t = setTimeout(() => { if (form.step === 'searching' && form.lookupId === job.id) { cancelFind(); form.step = 'error'; form.findMsg = 'No answer from RAVS. Check the RAVS tab is open and logged in on this computer, then search again.'; renderFind(); } }, 60000);
+  findTimers.forEach(clearTimeout); findTimers = [];
+  // A search must never spin forever: each check below gives up with a plain reason.
+  const giveUp = (ms, test, msg) => findTimers.push(setTimeout(() => { if (form.step === 'searching' && form.lookupId === job.id && test()) { cancelFind(); form.step = 'error'; form.findMsg = msg; renderFind(); } }, ms));
+  if (EXT.ready && !verLt(EXT.version, '0.3.0')) {
+    giveUp(6000, () => !form.lookupStarted, "The RAVS Helper didn't pick up the search. Reload this page (Cmd+R) and search again.");
+    giveUp(25000, () => !form.lookupHeard, "The RAVS tab isn't answering. Click the RAVS tab in Chrome, press Cmd+R to reload it, check you're logged in, then search again.");
+    giveUp(60000, () => true, "RAVS didn't answer within a minute. Look at the RAVS tab to see where it stopped, then search again.");
+  } else giveUp(45000, () => true, "RAVS didn't answer. Check RAVS is open and logged in in Chrome. If it still doesn't work, update the RAVS Helper on this computer.");
   if (EXT.ready) window.postMessage({ psm: 'app-lookup', job }, '*');
   else setTimeout(() => onLookup(demoLookup(job)), 1200);
 }
-function cancelFind() { if (form.lookupId && EXT.ready) window.postMessage({ psm: 'app-lookup-cancel', id: form.lookupId }, '*'); form.lookupId = ''; }
+let findTimers = [];
+const verLt = (a, b) => { const x = String(a || '0').split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== y[i]) return (x[i] || 0) < y[i]; return false; };
+function cancelFind() { if (form.lookupId && EXT.ready) window.postMessage({ psm: 'app-lookup-cancel', id: form.lookupId }, '*'); form.lookupId = ''; findTimers.forEach(clearTimeout); findTimers = []; }
 // Demo only: pretends to be RAVS so the flow can be tried without the helper.
 function demoLookup(job) {
   const known = ROWS.find(r => (job.nhs && r.nhs === job.nhs) || (job.dob && r.dob === job.dob && r.surname === job.surname));
@@ -832,7 +843,7 @@ function demoLookup(job) {
 }
 function onLookup(res) {
   if (!res || res.id !== form.lookupId || form.step !== 'searching') return;
-  clearTimeout(startFind._t);
+  findTimers.forEach(clearTimeout); findTimers = [];
   if (res.ok) { form.step = 'found'; form.found = res.patient; } else { form.step = 'error'; form.findMsg = res.error || 'RAVS could not find this patient.'; }
   renderFind();
 }
@@ -881,10 +892,10 @@ function renderFind() {
   const kv = (k, v, cls = '') => `<div class="kv"><span class="k">${esc(k)}</span><span class="v ${cls}">${v}</span></div>`;
   if (st === 'find' || st === 'error') {
     area.innerHTML = msg + (canSearch()
-      ? `<div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-find>${st === 'error' ? 'Search again' : 'Search RAVS'}</button>${skip}</div>${!EXT.ready ? '<p class="small muted" style="margin:0">Demo: RAVS answers are made up here. On your Macs the RAVS Helper looks the patient up in the RAVS tab.</p>' : ''}`
+      ? `<div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-find>${st === 'error' ? 'Search again' : 'Search RAVS'}</button>${st === 'error' && EXT.ready && !verLt(EXT.version, '0.3.0') ? '<button type="button" class="btn" data-showravs>Show RAVS tab</button>' : ''}${skip}</div>${!EXT.ready ? '<p class="small muted" style="margin:0">Demo: RAVS answers are made up here. On your Macs the RAVS Helper looks the patient up in the RAVS tab.</p>' : ''}`
       : `<div class="alert info">The RAVS Helper isn't installed in Chrome on this computer, so the patient can't be checked on RAVS from here.</div><div class="actions" style="margin-top:0"><button type="button" class="btn primary lg" data-findskip>Continue</button></div>`);
   } else if (st === 'searching') {
-    area.innerHTML = `<div class="searching"><span class="spin"></span><span>Searching RAVS for ${esc(f.nhs ? fmtNhs(f.nhs) : `${f.given} ${f.surname}`)}…</span><span class="sp" style="flex:1"></span><button type="button" class="btn ghost sm" data-findcancel>Cancel</button></div>`;
+    area.innerHTML = `<div class="searching"><span class="spin"></span><span>Searching RAVS for ${esc(f.nhs ? fmtNhs(f.nhs) : `${f.given} ${f.surname}`)}…${form.findStatus ? `<br><span class="small">${esc(form.findStatus)}</span>` : ''}</span><span class="sp" style="flex:1"></span><button type="button" class="btn ghost sm" data-findcancel>Cancel</button></div>`;
   } else if (st === 'found') {
     const p = form.found, diffs = differences(f, p);
     area.innerHTML = `<div class="glabel" style="margin:0">Found on RAVS. Check these with the patient.</div>
@@ -934,7 +945,7 @@ async function submitDesk(ev) {
   finally { $('#regBtn').disabled = $('#waitBtn').disabled = false; }
 }
 function clearForm() {
-  cancelFind(); clearTimeout(startFind._t);
+  cancelFind(); findTimers.forEach(clearTimeout); findTimers = [];
   $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' }; showMoreVax = false;
   $('#nhsHint').textContent = ''; $('#dobHint').textContent = ''; $('#dupBox').innerHTML = '';
   renderDeskForm(); renderFind(); $('#fNhs').focus();
@@ -1198,6 +1209,7 @@ document.addEventListener('click', async ev => {
   if (d.goto) return showTab(d.goto);
   if (d.vax) { const v = d.vax; form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines, v]; return renderDeskForm(); }
   if ('find' in d) return startFind();
+  if ('showravs' in d) return window.postMessage({ psm: 'app-show-ravs' }, '*');
   if ('findcancel' in d) { cancelFind(); form.step = 'find'; return renderFind(); }
   if ('findok' in d) return confirmPatient(true);
   if ('findskip' in d) return confirmPatient(false);
@@ -1250,7 +1262,7 @@ $('#deskForm').addEventListener('submit', submitDesk);
 $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
-const EXT = { ready: false };
+const EXT = { ready: false, version: '' };
 function ravsJob(r) {
   return { id: r.id, visitId: r.visitId, nhs: r.nhs, given: r.given, surname: r.surname, dob: r.dob, postcode: r.postcode, date: r.date,
     vaccine: r.vaccine, ravsVaccine: VACCINES[r.vaccine]?.ravs || r.vaccine, product: r.product, batch: r.batch, vaccinator: r.vaccinator,
@@ -1266,7 +1278,9 @@ function sendToRavs(rows) {
 window.addEventListener('message', async ev => {
   if (ev.source !== window || !ev.data) return;
   const d = ev.data;
-  if (d.psm === 'ext-ready') { if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } }
+  if (d.psm === 'ext-ready') { EXT.version = d.version || ''; if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } }
+  if (d.psm === 'ext-lookup-started' && d.id === form.lookupId) { form.lookupStarted = true; if (d.status) { form.findStatus = d.status; renderFind(); } }
+  if (d.psm === 'ext-lookup-status' && d.id === form.lookupId && form.step === 'searching') { form.lookupStarted = form.lookupHeard = true; form.findStatus = d.text || ''; renderFind(); }
   if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }
   if (d.psm === 'ext-queued') toast(`${d.added} sent to RAVS Helper (${d.total} in its queue)`);
   if (d.psm === 'ext-done' && Array.isArray(d.results) && d.results.length) {

@@ -29,9 +29,14 @@
         const rest = queue.filter(j => j.id !== job.id && !j.lookup);
         const at = current ? rest.findIndex(j => j.id === current) + 1 : 0;
         rest.splice(at, 0, job);
-        chrome.storage.local.set({ queue: rest, paused: false }, () => chrome.runtime.sendMessage({ type: 'open-ravs', focus: false }));
+        const busy = current && current !== job.id && !(queue.find(j => j.id === current) || {}).lookup;
+        chrome.storage.local.set({ queue: rest, paused: false }, () => {
+          window.postMessage({ psm: 'ext-lookup-started', id: job.id, status: busy ? 'Waiting: the RAVS Helper is filling in a vaccination. The search starts once that one is saved or skipped.' : '' }, '*');
+          chrome.runtime.sendMessage({ type: 'open-ravs', focus: false });
+        });
       });
     }
+    if (d.psm === 'app-show-ravs') chrome.runtime.sendMessage({ type: 'open-ravs', focus: true });
     if (d.psm === 'app-lookup-cancel' && d.id) {
       chrome.storage.local.get({ queue: [], current: null }, ({ queue, current }) => {
         chrome.storage.local.set(Object.assign({ queue: queue.filter(j => j.id !== d.id) }, current === d.id ? { current: null, stage: null } : {}));
@@ -58,7 +63,10 @@
       });
     }
   });
-  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); if (area === 'local' && ch.lookups) sendLookups(); });
+  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); if (area === 'local' && ch.lookups) sendLookups();
+    const ls = area === 'local' && ch.lookupStatus && ch.lookupStatus.newValue;
+    if (ls && isApp()) window.postMessage({ psm: 'ext-lookup-status', id: ls.id, text: ls.text }, '*');
+  });
   announce();
   setTimeout(() => { announce(); sendDone(); sendLookups(); }, 1500);
 })();
