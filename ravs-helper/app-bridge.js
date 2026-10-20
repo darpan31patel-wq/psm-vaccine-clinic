@@ -18,6 +18,13 @@
     });
   }
 
+  function sendVaccinators() {
+    if (!isApp()) return;
+    chrome.storage.local.get({ ravsVaccinators: null }, ({ ravsVaccinators }) => {
+      if (ravsVaccinators) window.postMessage({ psm: 'ext-vaccinators', names: ravsVaccinators.names, at: ravsVaccinators.at }, '*');
+    });
+  }
+
   function onMessage(ev) {
     if (ev.source !== window || !ev.data || !isApp()) return;
     try { handle(ev.data); } catch (e) {
@@ -30,7 +37,7 @@
   window.addEventListener('message', onMessage);
   setInterval(() => window.addEventListener('message', onMessage), 500);
   function handle(d) {
-    if (d.psm === 'app-hello') { announce(); sendDone(); sendLookups(); }
+    if (d.psm === 'app-hello') { announce(); sendDone(); sendLookups(); sendVaccinators(); }
     // A patient search: goes ahead of waiting vaccinations, but never interrupts one already being filled.
     if (d.psm === 'app-lookup' && d.job && d.job.id) {
       chrome.storage.local.get({ queue: [], current: null }, ({ queue, current }) => {
@@ -74,7 +81,7 @@
       });
     }
   }
-  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); if (area === 'local' && ch.lookups) sendLookups();
+  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); if (area === 'local' && ch.lookups) sendLookups(); if (area === 'local' && ch.ravsVaccinators) sendVaccinators();
     const ls = area === 'local' && ch.lookupStatus && ch.lookupStatus.newValue;
     if (ls && isApp()) window.postMessage({ psm: 'ext-lookup-status', id: ls.id, text: ls.text }, '*');
   });

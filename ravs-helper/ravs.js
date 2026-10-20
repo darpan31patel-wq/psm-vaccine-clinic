@@ -35,6 +35,8 @@
   }
   function radios() { return [...document.querySelectorAll('input[type=radio]')].filter(r => !r.disabled); }
   function radioWhere(pred) { return radios().find(r => pred(labelText(r), r)); }
+  // RAVS shows user names as typed (e.g. lower case, a letter short), so match each word on its first letters.
+  const nameLike = (label, want) => { const ws = want.split(' ').filter(Boolean); return ws.length > 1 && ws.every(w => label.includes(w.slice(0, Math.max(3, Math.min(w.length, 5))))); };
   function radioLabel(text) { const t = norm(text); return radioWhere(l => l === t); }
   function setValue(el, v) {
     const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -79,10 +81,23 @@
       if (!/vaccination|history/i.test(h.textContent)) return;
       for (let el = h.nextElementSibling; el && !/^H[1-3]$/.test(el.tagName); el = el.nextElementSibling) out.push(el.innerText.trim());
     });
-    return out.filter(Boolean).join('\n').slice(0, 1500);
+    return out.filter(Boolean).join('\n').slice(0, 8000);
   }
   function fmtNhs(s) { s = String(s || '').replace(/\D/g, ''); return s.length === 10 ? `${s.slice(0, 3)} ${s.slice(3, 6)} ${s.slice(6)}` : s; }
   function todayIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+  // The names RAVS lists under "Who is the vaccinator?", spelt exactly as RAVS shows them, so the app can only use those.
+  async function saveVaccinators() {
+    const names = radios().map(r => {
+      const l = (r.id && document.querySelector(`label[for="${CSS.escape(r.id)}"]`)) || r.closest('label');
+      const t = String(l ? l.textContent : '').replace(/\s+/g, ' ').trim();
+      const me = t.match(/^Me \((.+)\)$/i);
+      return me ? me[1].trim() : t.replace(/\s*\([^)]*@[^)]*\)\s*$/, '').trim();
+    }).filter(Boolean);
+    if (!names.length) return;
+    const { ravsVaccinators } = await get({ ravsVaccinators: null });
+    if (!ravsVaccinators || JSON.stringify(ravsVaccinators.names) !== JSON.stringify(names)) await set({ ravsVaccinators: { names, at: new Date().toISOString() } });
+  }
 
   /* ---------- which page are we on ---------- */
   function step() {
@@ -164,9 +179,10 @@
       return { go: true };
     },
     async vaccinator(job) {
+      await saveVaccinators();
       const want = norm(job.vaccinator);
       if (!want) return { wait: 'Choose the vaccinator. The app has none set for this vaccination.' };
-      const r = radioWhere(l => l === want || l.startsWith(want + ' (') || l.includes('(' + want + ')') || l.includes(want));
+      const r = radioWhere(l => l === want || l.startsWith(want + ' (') || l.includes('(' + want + ')') || l.includes(want)) || radioWhere(l => nameLike(l, want));
       if (!choose(r)) return { wait: `Couldn't find "${job.vaccinator}" in the vaccinator list. Pick them, then press Continue.` };
       return { go: true };
     },
@@ -207,12 +223,14 @@
       const checks = [
         ['Vaccine', rows['vaccine'], v => norm(v).includes(norm(job.ravsVaccine === 'COVID-19' ? 'covid' : job.ravsVaccine))],
         ['Batch', rows['batch'], v => norm(v).replace(/\s/g, '').includes(norm(job.batch).replace(/\s/g, ''))],
-        ['Vaccinator', rows['vaccinator'], v => norm(v).includes(norm(job.vaccinator))],
+        ['Vaccinator', rows['vaccinator'], v => norm(v).includes(norm(job.vaccinator)) || nameLike(norm(v), norm(job.vaccinator))],
         ['Eligibility', rows['eligibility'], v => norm(v) === norm(job.eligibility)],
         ['Injection site', rows['injection site'], v => norm(v) === norm(job.site)],
         ['Date of birth', rows['date of birth'], v => longToIso(v) === job.dob],
       ];
       const bad = checks.filter(([, v, ok]) => v != null && !ok(v)).map(([k]) => k);
+      const note = document.querySelector('textarea');
+      if (note && job.note && !note.value) setValue(note, job.note);
       const btn = [...document.querySelectorAll('button, input[type=submit]')].find(b => /confirm and save/i.test(b.textContent || b.value || ''));
       if (btn && !btn.__psm) {
         btn.__psm = true;
@@ -244,18 +262,23 @@
   async function run() {
     if (busy) return; busy = true;
     try {
+      if (step() === 'vaccinator') await saveVaccinators();
       let st = await state();
       // A vaccination was just submitted: decide whether it saved.
       if (st.stage === 'submitted' && st.current) {
         if (step() === 'confirm' || hasError()) {
           if (hasError()) { await set({ stage: null }); message = 'RAVS showed a problem. Fix it and press Confirm and save again.'; messageBad = true; }
+        } else if (!/vaccination saved/.test(norm(document.body.innerText))) {
+          // Only RAVS's own "Vaccination saved" message counts. Give the page a few seconds to show it.
+          if (Date.now() - (st.submittedAt || 0) < 8000) { clearTimeout(run._w); run._w = setTimeout(run, 1000); }
+          else { message = 'RAVS moved on without showing "Vaccination saved". Check Records in RAVS for this patient. It stays on To record in the app until you mark it.'; messageBad = true; }
         } else {
           const job = st.queue.find(j => j.id === st.current);
           const cap = st.captured[st.current] || {};
           const done = st.done.concat([{ id: st.current, at: new Date().toISOString(), address: cap.address || '', gp: cap.gp || '', nhs: cap.nhs || '' }]);
           const captured = Object.assign({}, st.captured); delete captured[st.current];
           await set({ done, captured, queue: st.queue.filter(j => j.id !== st.current), current: null, stage: null });
-          message = job ? `Saved ${job.given} ${job.surname} (${job.vaccine}). The app will mark it as recorded.` : 'Saved.'; messageBad = false;
+          message = job ? `RAVS says "Vaccination saved" for ${job.given} ${job.surname} (${job.vaccine}). Marked as recorded in the app.` : 'Saved.'; messageBad = false;
           st = await state();
           lastKey = '';
           if (st.queue.length && !st.paused) { await sleep(800); return startNext(); }
