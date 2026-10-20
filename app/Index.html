@@ -519,14 +519,15 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
     <div class="actions" style="margin-top:12px"><button type="button" class="btn sm" id="addProd">Add a product</button></div>
     <h3>Defaults</h3>
     <div class="editgrid">
+      <div class="f"><label for="sOperator">Operator on this computer</label><select id="sOperator"></select></div>
       <div class="f"><label for="sVaccinator">Vaccinator on duty</label><select id="sVaccinator"></select></div>
       <div class="f"><label for="sSite">Injection site</label><select id="sSite"></select></div>
       <div class="f"><label for="sConsent">Consent given by</label><select id="sConsent"></select></div>
     </div>
     <h3>People and places</h3>
     <div class="editgrid">
-      <div class="f"><label for="sVaccinators">Vaccinators</label><div class="vaxpick" id="sVaxRavs"></div><textarea id="sVaccinators" rows="4"></textarea><span class="hint" id="sVaxHint"></span></div>
-      <div class="f"><label for="sStaff">Desk staff, one per line</label><textarea id="sStaff" rows="4"></textarea></div>
+      <div class="f"><label for="sVaccinators">Vaccinators (names from RAVS)</label><div class="vaxpick" id="sVaxRavs"></div><textarea id="sVaccinators" rows="4"></textarea><span class="hint" id="sVaxHint"></span></div>
+      <div class="f"><label for="sStaff">Operators (people doing the admin), one per line</label><textarea id="sStaff" rows="4"></textarea></div>
       <div class="f"><label for="sLocations">Locations, one per line</label><textarea id="sLocations" rows="4"></textarea></div>
     </div>
     <h3>Private prices</h3>
