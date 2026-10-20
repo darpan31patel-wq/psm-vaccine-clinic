@@ -1206,7 +1206,14 @@ function showTab(name) {
   store.set('psm.tab', name);
 }
 document.addEventListener('click', async ev => {
-  if (ev.target.closest('#ravsBtn') && canAskRavs()) { ev.preventDefault(); window.postMessage({ psm: 'app-show-ravs' }, '*'); return setTimeout(askRavs, 2500); }
+  // A helper that is answering brings the RAVS tab to the front (or opens it); otherwise open RAVS in a new tab.
+  if (ev.target.closest('#ravsBtn')) {
+    ev.preventDefault();
+    if (helperAnswering()) { window.postMessage({ psm: 'app-show-ravs' }, '*'); return setTimeout(askRavs, 2500); }
+    const w = window.open($('#ravsBtn').href, '_blank');
+    if (!w) toast("Chrome didn't open RAVS from here. Use your RAVS bookmark.");
+    return;
+  }
   const b = ev.target.closest('button, [data-scrim]'); if (!b) return;
   const d = b.dataset;
   if (b.matches('[data-scrim]') && ev.target === b) return closeModal();
@@ -1270,12 +1277,15 @@ $('#setForm').addEventListener('submit', saveSettings);
 const EXT = { ready: false, version: '', ravs: '' };
 // The RAVS button in the header: opens RAVS, and with the helper shows whether the RAVS tab is ready.
 const canAskRavs = () => EXT.ready && !verLt(EXT.version, '0.4.0');
+// A helper removed or updated while this page was open stops answering until the page is reloaded.
+const helperAnswering = () => canAskRavs() && Date.now() - (EXT.answeredAt || 0) < 25000;
 function askRavs() { if (canAskRavs() && document.visibilityState === 'visible') window.postMessage({ psm: 'app-ravs-status' }, '*'); }
-setInterval(askRavs, 10000);
+setInterval(() => { askRavs(); renderRavs(); }, 10000);
 document.addEventListener('visibilitychange', askRavs);
 function renderRavs() {
   const [dot, text, title] = !EXT.ready ? ['idle', 'Open RAVS', "The RAVS Helper isn't installed in Chrome on this computer."]
     : !canAskRavs() ? ['wait', 'Open RAVS', 'Update the RAVS Helper to see here whether RAVS is ready.']
+    : EXT.answeredAt && !helperAnswering() ? ['wait', 'Open RAVS', 'The RAVS Helper stopped answering. Reload this page (Cmd+R).']
     : ({ ready: ['', 'RAVS ready', 'RAVS is open and logged in, and the RAVS Helper is running there. Click to show the RAVS tab.'],
          login: ['wait', 'RAVS: log in', 'RAVS is open but needs you to log in. Click to show the RAVS tab.'],
          reload: ['wait', 'RAVS: reload', 'The RAVS Helper is not running in the RAVS tab yet. Click to reload it.'] }[EXT.ravs]
@@ -1298,7 +1308,7 @@ window.addEventListener('message', async ev => {
   if (ev.source !== window || !ev.data) return;
   const d = ev.data;
   if (d.psm === 'ext-ready') { EXT.version = d.version || ''; if (!EXT.ready) { EXT.ready = true; renderTodo(); renderFind(); } renderRavs(); askRavs(); }
-  if (d.psm === 'ext-ravs-status') { EXT.ravs = d.state; renderRavs(); }
+  if (d.psm === 'ext-ravs-status') { EXT.ravs = d.state; EXT.answeredAt = Date.now(); renderRavs(); }
   if (d.psm === 'ext-lookup-started' && d.id === form.lookupId) { form.lookupStarted = true; if (d.status) { form.findStatus = d.status; renderFind(); } }
   if (d.psm === 'ext-lookup-status' && d.id === form.lookupId && form.step === 'searching') { form.lookupStarted = form.lookupHeard = true; form.findStatus = d.text || ''; renderFind(); }
   if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }
