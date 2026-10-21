@@ -55,7 +55,8 @@
   }
   function choose(r) { if (r && !r.checked) r.click(); return !!r; }
   function continueButton() {
-    const btns = [...document.querySelectorAll('main button, main input[type=submit], form button, form input[type=submit]')];
+    // On pages with nothing to fill in (like Check the patient's details) RAVS's Continue is a link styled as a button.
+    const btns = [...document.querySelectorAll('button, input[type=submit]'), ...document.querySelectorAll('a')];
     return btns.find(b => /^(continue|search)$/i.test((b.textContent || b.value || '').trim())) || null;
   }
   function looksLikeLogin() { return !!document.querySelector('input[type=password]') || /\b(log ?in|sign ?in)\b/.test(h1() + ' ' + norm(document.title)); }
