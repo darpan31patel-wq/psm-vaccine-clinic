@@ -450,6 +450,29 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 .scrim { position: fixed; inset: 0; background: rgba(10, 20, 22, .45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; z-index: 20; overflow-y: auto; }
 .modal { background: var(--surface); border-radius: 16px; border: 1px solid var(--line); width: min(720px, 100%); padding: 24px; display: grid; gap: 14px; }
 .modal h2 { margin: 0; font-size: 19px; }
+.modal.wide { width: min(1080px, 100%); }
+.rcwrap { display: grid; gap: 14px; }
+.rcdrop { display: grid; gap: 4px; justify-items: center; text-align: center; padding: 26px 16px; border: 2px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); cursor: pointer; }
+.rcdrop.over, .rcdrop:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.rcdrop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.rcdrop b { font-size: 16px; color: var(--accent); } .rcdrop span { font-size: 13.5px; color: var(--muted); }
+.rctiles { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 4px 0; }
+.rcgroup { border-left: 4px solid var(--warn); padding: 4px 0 4px 14px; }
+.rcgroup.bad { border-left-color: var(--bad); }
+.rcgroup h3 { margin: 4px 0 0; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.rcgroup.bad h3 { color: var(--bad); } .rcgroup.warn h3 { color: var(--warn); }
+.rcgroup .count { font-size: 13px; padding: 1px 9px; border-radius: 99px; background: color-mix(in srgb, currentColor 14%, transparent); }
+.rcgroup p { margin: 2px 0 4px; }
+.rcgroup .list { max-height: 320px; overflow-y: auto; }
+.rcmark { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rcget { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; padding: 16px; border-radius: 14px; background: linear-gradient(135deg, var(--flu-soft), var(--surface) 70%); border: 1px solid color-mix(in srgb, var(--flu) 25%, var(--line)); }
+.rcget-t { display: grid; gap: 2px; flex: 1 1 240px; } .rcget-t b { font-size: 16px; color: var(--flu); } .rcget-t span { font-size: 13.5px; color: var(--muted); }
+.rcget .f { margin: 0; }
+.rcadd { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 2px 0 6px 18px; }
+.rcold { border-left-color: var(--faint); } .rcold summary { cursor: pointer; list-style: none; } .rcold summary::-webkit-details-marker { display: none; } .rcold h3 { color: var(--muted); }
+.rcold summary h3::after { content: '\25B8  show'; font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 6px; } .rcold[open] summary h3::after { content: '\25BE  hide'; }
+.rcmap summary { cursor: pointer; font-size: 13.5px; color: var(--muted); font-weight: 700; }
+.rcmap .editgrid { margin-top: 10px; }
 .statusline { font-weight: 700; font-size: 14px; padding: 8px 12px; border-radius: 10px; }
 .statusline.on { background: var(--ok-soft); color: var(--ok); }
 .statusline.off { background: var(--warn-soft); color: var(--warn); }
@@ -610,7 +633,7 @@ ol.steps { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
 
 <!-- RECORDS -->
 <section class="tab" id="tab-records">
-  <div class="pagehead"><h2>Records</h2><span class="sp"></span><button class="btn primary" id="exportBtn" type="button">Export to Excel</button></div>
+  <div class="pagehead"><h2>Records</h2><span class="sp"></span><button class="btn" id="ravsCheckBtn" type="button">RAVS check</button><button class="btn primary" id="exportBtn" type="button">Export to Excel</button></div>
   <div class="tiles" id="tiles"></div>
   <div class="grid2" style="grid-template-columns: minmax(0,1.2fr) minmax(0,1fr)">
     <div class="panel">

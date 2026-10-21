@@ -64,6 +64,15 @@
         });
       });
     }
+    // RAVS check: the helper fetches this pharmacy's report from RAVS's Reports pages.
+    if (d.psm === 'app-export' && d.job && d.job.id) {
+      chrome.storage.local.set({ exportJob: Object.assign({}, d.job, { startedAt: Date.now() }), exportResult: null }, () => {
+        window.postMessage({ psm: 'ext-export-status', id: d.job.id, text: 'Sent to the RAVS Helper' }, '*');
+        chrome.runtime.sendMessage({ type: 'open-ravs', focus: false, export: true });
+      });
+    }
+    if (d.psm === 'app-export-cancel') chrome.storage.local.set({ exportJob: null });
+    if (d.psm === 'app-export-ack') chrome.storage.local.set({ exportResult: null });
     if (d.psm === 'app-show-ravs') chrome.runtime.sendMessage({ type: 'open-ravs', focus: true });
     if (d.psm === 'app-side-by-side') chrome.runtime.sendMessage({ type: 'side-by-side', screen: d.screen }, res => { if (res && !res.ok) window.postMessage({ psm: 'ext-side-by-side-failed', message: res.error }, '*'); });
     if (d.psm === 'app-ravs-status') chrome.runtime.sendMessage({ type: 'ravs-status' }, res => window.postMessage({ psm: 'ext-ravs-status', state: (res && res.state) || 'closed' }, '*'));
@@ -94,6 +103,10 @@
     }
   }
   chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.done) sendDone(); if (area === 'local' && ch.lookups) sendLookups(); if (area === 'local' && ch.ravsVaccinators) sendVaccinators();
+    const es = area === 'local' && ch.exportStatus && ch.exportStatus.newValue;
+    if (es && isApp()) window.postMessage({ psm: 'ext-export-status', id: es.id, text: es.text }, '*');
+    const er = area === 'local' && ch.exportResult && ch.exportResult.newValue;
+    if (er && isApp()) window.postMessage(Object.assign({ psm: 'ext-export' }, er), '*');
     const ls = area === 'local' && ch.lookupStatus && ch.lookupStatus.newValue;
     if (ls && isApp()) window.postMessage({ psm: 'ext-lookup-status', id: ls.id, text: ls.text }, '*');
   });

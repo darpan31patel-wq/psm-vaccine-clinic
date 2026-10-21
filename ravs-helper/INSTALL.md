@@ -41,6 +41,10 @@ The panel in the bottom-right corner of RAVS has these buttons:
 
 When the desk presses **Search RAVS**, the helper uses the RAVS tab in the background. It enters the NHS number (or name, date of birth and postcode), stops on the patient's details page and sends those details back to the app. Nothing is recorded in RAVS. If RAVS can't find the patient, or isn't logged in, the app says so.
 
+## Getting the RAVS export (RAVS check)
+
+In the app, go to **Records**, click **RAVS check**, pick the dates (up to 90 days) and click **Get RAVS export**. The helper goes through RAVS's own Reports pages in the RAVS tab: Create report, the dates, COVID-19 and Flu, your site, all data, then **Confirm and create report** and **Download report**. The file goes straight to the RAVS check. If RAVS only offers it as a download, it lands in Downloads and the app tells you to drag it in. A vaccination waiting in the helper's queue always goes first. This only makes a report; it never changes a record.
+
 ## When it stops and asks you
 
 - **"Check this patient":** RAVS found a different NHS number or date of birth, or the record is missing its NHS number, address or GP (so it may not be the full profile). Check with the patient, then carry on by hand.

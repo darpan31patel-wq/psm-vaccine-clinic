@@ -1157,6 +1157,235 @@ async function exportExcel() {
   };
 }
 
+/* ---------- RAVS check ---------- */
+// Compare a RAVS export (CSV or Excel) with the app's NHS doses. The file is read in this browser only and never saved or sent anywhere.
+const RC_FIELDS = [
+  ['nhs', 'NHS number', /nhs/],
+  ['date', 'Vaccination date', /(vacc|administ|event|given|appointment).*(date|time)|^date( ?(and|&) ?time)?( of vaccination)?$|date.*(vacc|administ|given)/],
+  ['vaccine', 'Vaccine', /vacc.*(type|program|name|product|given|brand)|programme|^vaccine$|^product$|disease|procedure/],
+  ['dob', 'Date of birth', /birth|dob/],
+  ['surname', 'Last name', /surname|last ?name|family ?name/],
+  ['given', 'First name', /forename|first ?name|given ?name/],
+  ['name', 'Full name (if no first/last)', /^(patient ?|person ?)?(full ?)?name$/],
+];
+const rcKind = v => { const s = String(v || '').toLowerCase(); return /covid|sars|comirnaty|spikevax|nuvaxovid|kostaive/.test(s) ? 'covid' : /flu|influenza|laiv|tiv|qiv/.test(s) ? 'flu' : /mmr|measles/.test(s) ? 'mmr' : /menb|mening|bexsero/.test(s) ? 'menb' : /pneum|ppv/.test(s) ? 'ppv' : s ? 'other' : ''; };
+const RC_KIND_LABEL = { flu: 'Flu', covid: 'COVID', mmr: 'MMR', menb: 'MenB', ppv: 'PPV', other: 'Other', '': '' };
+const RC_EXTRA = { postcode: /^postcode$/, address: /^address$/, phone: /^(contactdetails|phone|telephone|mobile)$/, gp: /^registeredgp(odscode)?$/, gender: /^gender$/,
+  product: /^vaccineproduct$/, batch: /^batch(number)?$/, eligibility: /^eligibilitytype$/, vaccinator: /^vaccinatingclinician$/, entered: /^dateentered$/, comments: /^vaccinationcomments$/ };
+let RC = null; // { head, rows, map, from, to, result }
+
+function rcCell(v) {
+  if (v == null) return '';
+  if (v instanceof Date) return isoDate(new Date(v.getTime() + v.getTimezoneOffset() * 60000));
+  if (typeof v === 'object') return v.richText ? v.richText.map(t => t.text).join('') : v.text != null ? String(v.text) : v.result != null ? rcCell(v.result) : '';
+  return String(v).trim();
+}
+function parseCsv(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  const sep = (text.split('\n')[0].match(/\t/g) || []).length > (text.split('\n')[0].match(/,/g) || []).length ? '\t' : ',';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(cur.trim()); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur.trim()); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur.trim()); rows.push(row); }
+  return rows.filter(r => r.some(x => x));
+}
+async function rcReadFile(file) {
+  if (/\.(xlsx|xlsm)$/i.test(file.name)) {
+    const ExcelJS = await loadExcelJs();
+    const wb = new ExcelJS.Workbook(); await wb.xlsx.load(await file.arrayBuffer());
+    // Use the sheet with the most rows.
+    const ws = wb.worksheets.slice().sort((a, b) => b.actualRowCount - a.actualRowCount)[0];
+    const out = []; ws.eachRow({ includeEmpty: false }, r => { const a = []; for (let i = 1; i <= ws.columnCount; i++) a.push(rcCell(r.getCell(i).value)); out.push(a); });
+    return out.filter(r => r.some(x => x));
+  }
+  if (/\.xls$/i.test(file.name)) throw new Error('This is an old-style .xls file. Open it in Excel and save it as .xlsx or .csv, then try again.');
+  return parseCsv((await file.text()).replace(/^﻿/, ''));
+}
+// Dates in RAVS files may be 21/10/2026, 2026-10-21, 21-Oct-2026, with or without a time, or an Excel day number.
+function rcDate(s) {
+  s = String(s || '').trim(); if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/); if (m) { const y = m[3].length === 2 ? 2000 + +m[3] : +m[3]; return `${y}-${pad(+m[2])}-${pad(+m[1])}`; }
+  m = s.match(/^(\d{1,2})[\s\-]([A-Za-z]{3,})[\s\-,]+(\d{4})/); if (m) { const mi = MONTHS.findIndex(x => x.slice(0, 3).toLowerCase() === m[2].slice(0, 3).toLowerCase()); if (mi >= 0) return `${m[3]}-${pad(mi + 1)}-${pad(+m[1])}`; }
+  if (/^\d{5}(\.\d+)?$/.test(s)) return isoDate(new Date(Math.round((+s - 25569) * 86400000) + new Date().getTimezoneOffset() * 60000));
+  const d = new Date(s); return isNaN(d) ? '' : isoDate(d);
+}
+function rcGuess(rows) {
+  // The heading row is the first of the top 15 rows that names an NHS number or date of birth.
+  const hi = Math.max(0, rows.slice(0, 15).findIndex(r => r.some(c => /nhs|birth|dob/i.test(c))));
+  const head = rows[hi].map(h => String(h || '').trim());
+  const map = {}, used = new Set();
+  RC_FIELDS.forEach(([k, , re]) => { const i = head.findIndex((h, j) => !used.has(j) && re.test(h.toLowerCase().replace(/[_\-]+/g, ' '))); if (i >= 0) { map[k] = i; used.add(i); } });
+  // RAVS reports can include "not given" and deleted entries: those aren't vaccinations to match.
+  const col = re => head.findIndex(h => re.test(h.toLowerCase().replace(/[\s_\-]+/g, '')));
+  const vi = col(/^vaccinated$/), ai = col(/^audittype$/);
+  const data = rows.slice(hi + 1).filter(r => !(vi >= 0 && /^(no|false|n)$/i.test(String(r[vi] || '').trim())) && !(ai >= 0 && /delet/i.test(String(r[ai] || ''))));
+  // Extra RAVS columns, used when copying RAVS entries into the app.
+  const extra = {}; Object.entries(RC_EXTRA).forEach(([k, re]) => { const i = col(re); if (i >= 0) extra[k] = i; });
+  return { head, data, map, extra };
+}
+function rcRecords() {
+  const { data, map } = RC, get = (r, k) => map[k] == null ? '' : String(r[map[k]] ?? '').trim();
+  return data.map(r => {
+    let surname = get(r, 'surname'), given = get(r, 'given');
+    if (!surname && get(r, 'name')) { const n = get(r, 'name'); if (n.includes(',')) [surname, given] = n.split(',').map(x => x.trim()); else { const p = n.split(/\s+/); surname = p.pop() || ''; given = p.join(' '); } }
+    const x = {}; Object.entries(RC.extra || {}).forEach(([k, i]) => x[k] = String(r[i] ?? '').trim());
+    return { nhs: cleanNhs(get(r, 'nhs')), date: rcDate(get(r, 'date')), dob: rcDate(get(r, 'dob')) || parseDob(get(r, 'dob')) || '', surname: surname.toUpperCase(), given: titleCase(given), vaccineText: get(r, 'vaccine'), kind: rcKind(get(r, 'vaccine')), x };
+  }).filter(r => r.date && (r.nhs || r.surname));
+}
+const rcSamePerson = (a, b) => (a.nhs && b.nhs) ? a.nhs === b.nhs : !!(a.surname && a.dob && a.surname.toUpperCase() === b.surname.toUpperCase() && a.dob === b.dob);
+function rcCompare(ravs, app) {
+  const left = ravs.slice(), matched = [], appOnly = [], moved = [];
+  const pass = (dose, sameDay) => left.findIndex(x => rcSamePerson(x, dose) && (!x.kind || !dose.kind || x.kind === dose.kind) && (!sameDay || x.date === dose.date));
+  const rest = [];
+  app.forEach(d => { const i = pass(d, true); if (i >= 0) matched.push({ app: d, ravs: left.splice(i, 1)[0] }); else rest.push(d); });
+  rest.forEach(d => { const i = pass(d, false); if (i >= 0) moved.push({ app: d, ravs: left.splice(i, 1)[0] }); else appOnly.push(d); });
+  const byDate = (a, b) => b.date.localeCompare(a.date) || a.surname.localeCompare(b.surname);
+  appOnly.sort(byDate); left.sort(byDate);
+  return { matched, moved, appOnly, ravsOnly: left, notMarked: matched.concat(moved).filter(m => m.app.status === 'given') };
+}
+function openRavsCheck() {
+  RC = null;
+  openModal(`<div class="rcwrap"><h2>RAVS check</h2>
+    <p class="small muted" style="margin:0">Drop in the export from RAVS. The app lists anyone who is in one but not the other, so you can fix it before claiming on MYS. Private vaccinations are left out. The file stays on this computer and is not saved.</p>
+    <div class="rcget"><div class="rcget-t"><b>Get it from RAVS</b><span>The RAVS Helper makes the report on RAVS for you (up to 90 days).</span></div>
+      <div class="f"><label for="rcFrom">From</label><input type="date" id="rcFrom" value="${esc(rcDefaultFrom())}"></div><div class="f"><label for="rcTo">To</label><input type="date" id="rcTo" value="${todayIso()}"></div>
+      <button type="button" class="btn primary" id="rcGet">Get RAVS export</button></div>
+    <div id="rcGetMsg"></div>
+    <label class="rcdrop" id="rcDrop"><input type="file" id="rcFile" accept=".csv,.xlsx,.xlsm,.txt,text/csv"><b>Or choose a RAVS export file</b><span>or drag the file here (CSV or Excel)</span></label>
+    <div id="rcOut"></div>
+    <div class="actions"><button type="button" class="btn ghost" data-close>Close</button></div></div>`);
+  $('.modal').classList.add('wide');
+  const drop = $('#rcDrop');
+  ['dragover', 'dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(e => drop.addEventListener(e, () => drop.classList.remove('over')));
+  drop.addEventListener('drop', ev => { ev.preventDefault(); const f = ev.dataTransfer.files[0]; if (f) rcLoad(f); });
+  $('#rcFile').addEventListener('change', ev => { const f = ev.target.files[0]; if (f) rcLoad(f); });
+  $('#rcGet').addEventListener('click', rcRequest);
+  if (RC_EXPORT.id) rcGetMsg('info', RC_EXPORT.text || 'The RAVS Helper is making the report…');
+  if (RC_EXPORT.file) { const f = RC_EXPORT.file; RC_EXPORT.file = null; rcLoad(f); }
+}
+// Asking the RAVS Helper (0.6.0 or later) to fetch the report from RAVS's Reports pages.
+const RC_EXPORT = { id: '', text: '', file: null };
+const rcDefaultFrom = () => { const d = new Date(); d.setDate(d.getDate() - 89); const f = isoDate(d); return S.seasonStart && S.seasonStart > f ? S.seasonStart : f; };
+function rcGetMsg(cls, html) { const el = $('#rcGetMsg'); if (el) el.innerHTML = html ? `<div class="alert ${cls}">${html}</div>` : ''; }
+function rcRequest() {
+  const from = $('#rcFrom').value, to = $('#rcTo').value;
+  if (!EXT.ready) return rcGetMsg('warn', 'The RAVS Helper isn\'t installed on this computer. Download the RAVS export from RAVS (Reports, Create report) and drop the file in the box below.');
+  if (verLt(EXT.version, '0.6.0')) return rcGetMsg('warn', `This needs RAVS Helper 0.6.0 or later (this computer has ${esc(EXT.version)}). Update the helper, or drop the RAVS export file in the box below.`);
+  if (!from || !to || from > to) return rcGetMsg('warn', 'Pick a From date before the To date.');
+  if (daysBetween(from, to) > 89) return rcGetMsg('warn', 'RAVS only makes reports for up to 90 days. Pick a shorter range, or do it in two goes.');
+  if (to > todayIso()) return rcGetMsg('warn', "The To date can't be in the future.");
+  RC_EXPORT.id = uid(); RC_EXPORT.text = 'Sending to the RAVS Helper…';
+  window.postMessage({ psm: 'app-export', job: { id: RC_EXPORT.id, from, to, vaccines: ['COVID-19', 'Flu'] } }, '*');
+  rcGetMsg('info', RC_EXPORT.text + ' <button type="button" class="btn sm ghost" id="rcCancel">Stop</button>');
+  $('#rcCancel')?.addEventListener('click', () => { window.postMessage({ psm: 'app-export-cancel' }, '*'); RC_EXPORT.id = ''; rcGetMsg('', ''); });
+  clearTimeout(rcRequest._t);
+  rcRequest._t = setTimeout(() => { if (RC_EXPORT.id && RC_EXPORT.text.startsWith('Sending')) rcGetMsg('warn', "The RAVS Helper didn't answer. Reload this page (Cmd+R) and try again, or drop the RAVS export file in the box below."); }, 15000);
+}
+function onExportStatus(d) {
+  if (!RC_EXPORT.id || d.id !== RC_EXPORT.id) return;
+  RC_EXPORT.text = d.text || '';
+  rcGetMsg('info', esc(RC_EXPORT.text) + '…');
+}
+function onExport(d) {
+  window.postMessage({ psm: 'app-export-ack' }, '*');
+  if (RC_EXPORT.id && d.id !== RC_EXPORT.id) return;
+  RC_EXPORT.id = '';
+  if (!d.ok) return $('#rcGetMsg') ? rcGetMsg('bad', esc(d.error || 'The RAVS export stopped.')) : toast(d.error || 'The RAVS export stopped.');
+  if (!d.data) return $('#rcGetMsg') ? rcGetMsg('ok', `RAVS made the report and saved it to <b>Downloads</b>${d.name ? ` as <b>${esc(d.name)}</b>` : ''}. Drag it from Downloads into the box below.`) : toast('RAVS export saved to Downloads. Open Records > RAVS check and drop it in.');
+  const bin = atob(d.data), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const file = new File([bytes], d.name || 'ravs-report.csv', { type: d.type || '' });
+  if ($('#rcGetMsg')) { rcGetMsg('ok', 'RAVS export received.'); rcLoad(file); }
+  else { RC_EXPORT.file = file; toast('RAVS export ready. Open Records > RAVS check to see it.'); }
+}
+async function rcLoad(file) {
+  $('#rcOut').innerHTML = '<p class="small muted">Reading the file…</p>';
+  try {
+    const rows = await rcReadFile(file);
+    if (rows.length < 2) throw new Error('The file looks empty');
+    RC = { file: file.name, ...rcGuess(rows) };
+    rcRun();
+  } catch (e) { console.warn(e); $('#rcOut').innerHTML = `<div class="alert bad">Couldn't read that file: ${esc(e && e.message || e)}.</div>`; }
+}
+async function rcRun() {
+  const missing = ['date'].concat(RC.map.nhs == null ? ['dob'] : []).filter(k => RC.map[k] == null);
+  const noPatient = RC.map.nhs == null && RC.map.surname == null && RC.map.name == null;
+  const ravs = (missing.length || noPatient) ? [] : rcRecords();
+  const pick = `<details class="rcmap" ${missing.length || noPatient || !ravs.length ? 'open' : ''}><summary>Columns used from ${esc(RC.file)}</summary><div class="editgrid">${RC_FIELDS.map(([k, label]) => `<div class="f"><label>${esc(label)}</label><select data-rcmap="${k}"><option value="">Not in file</option>${RC.head.map((h, i) => `<option value="${i}" ${RC.map[k] === i ? 'selected' : ''}>${esc(h || 'Column ' + (i + 1))}</option>`).join('')}</select></div>`).join('')}</div></details>`;
+  if (missing.length || noPatient || !ravs.length) {
+    $('#rcOut').innerHTML = `<div class="alert warn">${missing.length || noPatient ? "The app couldn't tell which column is which. Pick them below." : 'No vaccinations found with these columns. Check them below.'}</div>${pick}`;
+    return rcBindMap();
+  }
+  const dates = ravs.map(r => r.date).sort(), from = dates[0], to = dates[dates.length - 1];
+  $('#rcOut').innerHTML = '<p class="small muted">Comparing with the app…</p>';
+  const app = (await API.exportRows(from, to)).filter(r => !isPriv(r) && (r.status === 'given' || r.status === 'entered') && (VACCINES[r.vaccine]?.target || 'RAVS') === 'RAVS')
+    .map(r => ({ ...r, kind: rcKind(VACCINES[r.vaccine]?.ravs || r.vaccine) }));
+  const res = RC.result = rcCompare(ravs, app);
+  // Patients from before the app was used are in the old season sheet (Recall tab). Those count as accounted for.
+  let recall = []; try { recall = await API.recallGet(); } catch (e) { console.warn(e); }
+  const inSheet = rcInOldSheet(recall);
+  res.oldSheet = res.ravsOnly.filter(inSheet); res.ravsOnly = res.ravsOnly.filter(p => !inSheet(p));
+  const addable = res.ravsOnly.concat(res.oldSheet).filter(p => RC_KIND_VAX[p.kind]);
+  const t = todayIso(), late = d => daysBetween(d.date, t) > 15;
+  const tile = (k, n, c) => `<div class="tile ${c}"><div class="k">${k}</div><div class="n">${n}</div></div>`;
+  const line = (p, extra = '') => `<div class="row"><div class="time">${esc(ukDate(p.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(p))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(p.dob))}</span><span class="mono f f-nhs">${esc(fmtNhs(p.nhs) || 'No NHS number')}</span>${extra}</div></div><div class="right">${p.kind ? `<span class="vtag ${p.kind}">${esc(RC_KIND_LABEL[p.kind])}</span>` : ''}</div></div>`;
+  const appLine = d => line(d, `${d.vaccinator ? `<span class="f f-vac">${esc(d.vaccinator)}</span>` : ''}${late(d) ? '<span class="f" style="color:var(--bad);font-weight:700">Over 15 days, can\'t be claimed</span>' : ''}`);
+  const group = (title, cls, items, render, help) => `<div class="rcgroup ${cls}"><h3>${title} <span class="count">${items.length}</span></h3><p class="small muted">${help}</p><div class="list">${items.map(render).join('')}</div></div>`;
+  const issues = res.appOnly.length + res.ravsOnly.length + res.moved.length;
+  const addBtn = (items, label) => items.length ? `<div class="rcadd"><button type="button" class="btn sm primary" data-rcadd="${items === res.oldSheet ? 'old' : 'ravs'}">${label}</button><span class="small muted">They're added as already On RAVS, with the details from the RAVS file.</span></div>` : '';
+  $('#rcOut').innerHTML = `<div class="statusline ${issues ? 'off' : 'on'}">${ukDate(from)} to ${ukDate(to)}: ${issues ? `${issues} to look at` : 'everything matches'}</div>
+    <div class="tiles rctiles">${tile('Matched', res.matched.length + res.moved.length, 'ok')}${tile('In the app, not on RAVS', res.appOnly.length, res.appOnly.length ? 'bad' : 'ok')}${tile('On RAVS, not in the app', res.ravsOnly.length, res.ravsOnly.length ? 'warn' : 'ok')}${tile('Different date', res.moved.length, res.moved.length ? 'warn' : 'ok')}${res.oldSheet.length ? tile('In your old sheet', res.oldSheet.length, '') : ''}</div>
+    ${res.appOnly.length ? group('In the app, not on RAVS', 'bad', res.appOnly, appLine, 'Given here but missing from the RAVS file. Enter these on RAVS (Edit, then Fill in RAVS again).') : ''}
+    ${res.ravsOnly.length ? group('On RAVS, not in the app', 'warn', res.ravsOnly, p => line(p, p.vaccineText ? `<span class="f">${esc(p.vaccineText)}</span>` : ''), 'On RAVS but not registered in the app (or the old sheet). If they were vaccinated here, add them to the app.') + addBtn(res.ravsOnly.filter(p => RC_KIND_VAX[p.kind]), `Add ${res.ravsOnly.length === 1 ? 'it' : 'all ' + res.ravsOnly.length} to the app`) : ''}
+    ${res.oldSheet.length ? `<details class="rcgroup rcold"><summary><h3>In your old sheet, not in the app <span class="count">${res.oldSheet.length}</span></h3></summary><p class="small muted">On RAVS and in the old season sheet (Recall tab), from before you used the app. Nothing missing. Add them so the app has the whole season.</p><div class="list">${res.oldSheet.map(p => line(p)).join('')}</div></details>${addBtn(res.oldSheet, `Add ${res.oldSheet.length === 1 ? 'it' : 'all ' + res.oldSheet.length} to the app`)}` : ''}
+    ${res.moved.length ? group('Different date', 'warn', res.moved, m => line(m.app, `<span class="f">App ${esc(ukDate(m.app.date))}, RAVS ${esc(ukDate(m.ravs.date))}</span>`), 'Same patient and vaccine, but the dates differ. Check which one is right.') : ''}
+    ${res.notMarked.length ? `<div class="alert info rcmark"><span>${res.notMarked.length} matched ${res.notMarked.length === 1 ? 'vaccination shows' : 'vaccinations show'} "Not on RAVS yet" in the app.</span><button type="button" class="btn sm" id="rcMark">Mark ${res.notMarked.length === 1 ? 'it' : 'them'} as On RAVS</button></div>` : ''}
+    ${pick}`;
+  rcBindMap();
+  $$('[data-rcadd]').forEach(b => b.addEventListener('click', () => rcAdd(b, (b.dataset.rcadd === 'old' ? res.oldSheet : res.ravsOnly).filter(p => RC_KIND_VAX[p.kind]))));
+  $('#rcMark')?.addEventListener('click', async () => {
+    $('#rcMark').disabled = true;
+    await API.update(res.notMarked.map(m => m.app.id), { status: 'entered', enteredAt: `${todayIso()} ${nowTime()}`, enteredBy: me || 'RAVS check' });
+    toast('Marked as On RAVS'); await refresh(true); rcRun();
+  });
+}
+const RC_KIND_VAX = { flu: 'Flu', covid: 'COVID-19', mmr: 'MMR', menb: 'MenB' };
+// Recall people with this vaccine in the same season, by NHS number or surname + date of birth.
+function rcInOldSheet(recall) {
+  const by = new Map();
+  (recall || []).forEach(p => { const h = historyMap(p.history); [cleanNhs(p.nhs), nameKey(p)].forEach(k => { if (k && k.length > 2) by.set(k, h); }); });
+  return p => { const h = by.get(p.nhs) || by.get(nameKey(p)); const set = h && h[seasonOf(p.date)]; return !!set && set.has(RC_KIND_VAX[p.kind] || ''); };
+}
+// Copies RAVS entries into the app as vaccinations already on RAVS. Doses for the same person on the same day are one visit.
+async function rcAdd(btn, items) {
+  if (!me) return flashOperator();
+  if (!items.length) return;
+  btn.disabled = true; btn.textContent = `Adding ${items.length}…`;
+  const visits = {}, now = new Date().toISOString();
+  const rows = items.map(p => {
+    const x = p.x || {}, vk = (p.nhs || nameKey(p)) + '|' + p.date;
+    const ent = rcDate(x.entered), entTime = (String(x.entered || '').match(/(\d{1,2}:\d{2})/) || [])[1] || '';
+    const note = [x.gender ? `Gender: ${x.gender}.` : '', x.comments, 'Added from the RAVS export.'].filter(Boolean).join(' ');
+    return { id: uid(), visitId: visits[vk] ||= uid(), date: p.date, time: '', source: 'From RAVS', nhs: p.nhs, surname: p.surname, given: p.given, dob: p.dob,
+      postcode: fmtPostcode(x.postcode || ''), phone: x.phone || '', vaccine: RC_KIND_VAX[p.kind], product: x.product || p.vaccineText, batch: x.batch || '',
+      eligibility: x.eligibility || '', eligNote: '', consent: '', site: '', vaccinator: x.vaccinator || '', deskBy: me, location: 'Pharmacy', status: 'entered',
+      givenAt: p.date, enteredAt: ent ? `${ent} ${entTime}`.trim() : `${p.date}`, enteredBy: 'RAVS export', note, updatedAt: now, address: x.address || '', gp: x.gp || '' };
+  });
+  try {
+    const byVisit = {}; rows.forEach(r => (byVisit[r.visitId] ||= []).push(r));
+    const groups = Object.values(byVisit);
+    for (let i = 0; i < groups.length; i += 150) await API.register({ rows: groups.slice(i, i + 150).flat() });
+    toast(`${rows.length} added to the app from RAVS`); await refresh(true); rcRun();
+  } catch (e) { console.warn(e); btn.disabled = false; btn.textContent = 'Try again'; toast("Couldn't add them: " + (e && e.message || e)); }
+}
+function rcBindMap() { $$('[data-rcmap]').forEach(s => s.onchange = () => { s.value === '' ? delete RC.map[s.dataset.rcmap] : RC.map[s.dataset.rcmap] = +s.value; rcRun(); }); }
+
 /* ---------- settings ---------- */
 function renderSettings() {
   const opt = (list, cur) => list.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
@@ -1695,6 +1924,7 @@ document.addEventListener('click', async ev => {
   if (d.rmore) return recallMore(d.rmore);
   if (d.rfind) return recallFind(d.rfind);
   if (d.rcheck) return startRecallCheck(d.rcheck);
+  if (b.id === 'ravsCheckBtn') return openRavsCheck();
   if (b.id === 'addProd') { S.products = readProducts().concat([{ vaccine: 'Flu', product: '', batch: '', expiry: '', active: true }]); renderProdTable(); }
 });
 document.addEventListener('change', ev => {
@@ -1814,6 +2044,8 @@ window.addEventListener('message', async ev => {
   if (d.psm === 'ext-lookup-status' && d.id === form.lookupId && form.step === 'searching') { form.lookupStarted = form.lookupHeard = true; form.findStatus = d.text || ''; renderFind(); }
   if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }
   if (d.psm === 'ext-vaccinators' && Array.isArray(d.names) && d.names.length) onRavsVaccinators(d.names, d.at);
+  if (d.psm === 'ext-export-status') onExportStatus(d);
+  if (d.psm === 'ext-export') onExport(d);
   if (d.psm === 'ext-queued') toast(`${d.added} sent to RAVS Helper (${d.total} in its queue)`);
   if (d.psm === 'ext-done' && Array.isArray(d.results) && d.results.length) {
     const changes = d.results.map(x => {
