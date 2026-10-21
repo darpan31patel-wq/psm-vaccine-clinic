@@ -52,6 +52,7 @@ When the desk presses **Search RAVS**, the helper uses the RAVS tab in the backg
 - **Batches:** for the batch step to work, each batch number must be in the app's Settings exactly as RAVS lists it.
 - **COVID product:** set the COVID product name in Settings to exactly what RAVS shows (for example "Spikevax XFG").
 - **Patient details in Chrome:** the queue is kept only in that Mac's Chrome. Each record is removed as soon as it's saved, and **Clear queue** removes everything.
+- **Linked to your app:** the helper links itself to the first clinic app it sees on that computer, and only ever passes patient details to that app. If you ever make a brand-new deployment with a different link, remove the helper in chrome://extensions and load it again to relink it.
 - **RAVS changes:** RAVS is still in beta, and if NHS England changes a page the helper may stop filling it. It will say "Your turn on this page" instead of guessing. Send me a screenshot and I'll update it.
 - **Terms of use:** please read RAVS's Terms of use (link at the bottom of every RAVS page). Make sure you're happy that a helper that fills forms, with a person confirming every record, fits them.
 

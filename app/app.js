@@ -1737,7 +1737,7 @@ const BUILD = '21 Oct 2026, 4';
 const whenUk = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${ukDate(isoDate(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 function renderBuild() {
   const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups")` : ' · Nightly backup not turned on yet';
-  $('#buildInfo').textContent = `App version ${BUILD}${window.PSM_LOADED_FROM ? ` (from the ${window.PSM_LOADED_FROM}: GitHub could not be reached)` : ''} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}${backup}`;
+  $('#buildInfo').textContent = `App version ${BUILD}${window.PSM_LOADED_FROM ? ` (from the ${window.PSM_LOADED_FROM}: GitHub could not be reached)` : ''} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : EXT.error ? EXT.error : 'not installed on this computer'}${backup}`;
 }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
