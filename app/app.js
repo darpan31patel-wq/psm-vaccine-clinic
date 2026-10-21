@@ -94,7 +94,7 @@ function checkEligibility(vaccine, dobIso, S) {
     return { state: 'age', text: `Private, ${money(priceOf(vaccine, S))} · age ${ageNow}` };
   }
   if (vaccine === 'Nasal flu') {
-    if (S.nasalFrom && S.nasalTo && (dobIso < S.nasalFrom || dobIso > S.nasalTo)) return { state: 'warn', text: `Born outside ${ukDate(S.nasalFrom)} to ${ukDate(S.nasalTo)}. Check they are eligible.` };
+    if (S.nasalFrom && S.nasalTo && (dobIso < S.nasalFrom || dobIso > S.nasalTo)) return { state: 'blocked', short: 'born outside the age range', text: `Born outside ${ukDate(S.nasalFrom)} to ${ukDate(S.nasalTo)}, so not eligible by age.` };
     return { state: 'age', text: 'Date of birth is in the 2 to 3 year old range' };
   }
   return { state: 'free', text: '' };
@@ -192,8 +192,8 @@ const Demo = (() => {
       ['Testcase', 'Carol', '1950-11-02', 'KT5 3CC', ['Flu', 'COVID-19'], 'given', old],
       ['Dummy', 'David', '1944-03-09', 'KT6 4DD', ['Flu', 'COVID-19'], 'given', t],
       ['Placeholder', 'Erin', '1986-05-21', 'KT6 5EE', ['Flu'], 'given', t],
-      ['Mockford', 'Frank', '1952-09-17', 'KT5 6FF', ['Flu'], 'waiting', t],
-      ['Fakeley', 'Grace', '1979-12-03', 'KT6 7GG', ['Flu', 'COVID-19'], 'waiting', t],
+      ['Mockford', 'Frank', '1952-09-17', 'KT5 6FF', ['Flu'], 'given', t],
+      ['Fakeley', 'Grace', '1979-12-03', 'KT6 7GG', ['Flu', 'COVID-19'], 'given', t],
       ['Notreal', 'Harry', '1940-06-25', 'KT6 8HH', ['Flu', 'COVID-19'], 'booked', t],
       ['Pretend', 'Isla', '1962-01-11', 'KT5 9JJ', ['Flu'], 'booked', t],
       ['Madeup', 'Jack', '1947-04-22', 'KT6 1KK', ['Flu', 'COVID-19'], 'entered', t],
@@ -404,16 +404,49 @@ function statusPill(st, extra = '') { return `<span class="pill p-${st}">${STATU
 function vaxPills(vs) { return vs.map(r => `<span class="pill p-${r.status}" title="${esc(STATUS_LABEL[r.status])}">${esc(VACCINES[r.vaccine]?.short || r.vaccine)}</span>`).join(' '); }
 
 /* ---------- front desk ---------- */
-let showMoreVax = false;
+// Select vaccine shows four big choices: Flu, COVID, Private and Other. Private opens its own view (with Back) and replaces any NHS choice.
+let vaxView = 'main';
+const OTHER_VAX = () => Object.keys(VACCINES).filter(v => !VACCINES[v].main && !VACCINES[v].private);
+const PRIV_VAX = () => Object.keys(VACCINES).filter(v => VACCINES[v].private);
+// What a tile says about the patient's age for that vaccine.
+function tileElig(v, dob) {
+  if (!dob) return { cls: '', text: 'Enter date of birth' };
+  const e = checkEligibility(v, dob, S);
+  if (e.state === 'blocked') return { cls: 'bad', text: `NOT ELIGIBLE: ${e.short || 'under 18'}`, e };
+  if (e.state === 'age') return { cls: 'ok', text: VACCINES[v].private ? money(priceOf(v)) : 'Eligible by age', e };
+  if (e.state === 'reason') return { cls: 'warn', text: v === 'Flu' ? `Under ${S.fluAge}: needs a reason` : `Under ${S.covAge}: only some reasons`, e };
+  if (e.state === 'warn') return { cls: 'warn', text: 'Check age range', e };
+  return { cls: '', text: '', e };
+}
 function setCount(id, n) { const c = $(id); c.textContent = n || ''; c.dataset.n = n || 0; return c; }
 function renderDeskForm() {
-  const main = Object.keys(VACCINES).filter(v => VACCINES[v].main), priv = Object.keys(VACCINES).filter(v => VACCINES[v].private), more = Object.keys(VACCINES).filter(v => !VACCINES[v].main && !VACCINES[v].private);
-  $('#vaxPriv').innerHTML = priv.map(v => `<button type="button" class="chip priv" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)} <span class="pr">${money(priceOf(v))}</span></button>`).join('');
-  const openMore = showMoreVax || more.some(v => form.vaccines.includes(v));
-  $('#vaxMain').innerHTML = main.map(v => `<button type="button" class="chip ${vaxKind(v)}" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)}</button>`).join('') +
-    (openMore ? '' : `<button type="button" class="chip more" data-morevax>More vaccines</button>`);
-  $('#vaxMore').hidden = !openMore;
-  $('#vaxMore').innerHTML = more.map(v => `<button type="button" class="chip small ${vaxKind(v)}" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)}</button>`).join('');
+  const dob = parseDob($('#fDob').value), age = dob ? ageOn(dob, todayIso()) : null;
+  // A vaccine the patient is too young for can't stay chosen.
+  if (dob) form.vaccines = form.vaccines.filter(v => checkEligibility(v, dob, S).state !== 'blocked');
+  if (form.vaccines.some(isPriv)) vaxView = 'private';
+  const tile = (v, label, extraCls = '') => {
+    const t = tileElig(v, dob), on = form.vaccines.includes(v), no = t.cls === 'bad';
+    return `<button type="button" class="vtile ${vaxKind(v)} ${extraCls} ${t.cls ? 'e-' + t.cls : ''}" data-vax="${esc(v)}" aria-pressed="${on}" ${no ? 'disabled' : ''}>
+      <span class="vt-name">${esc(label || v)}</span><span class="vt-state">${t.cls === 'ok' && !VACCINES[v].private ? '✓ ' : ''}${esc(t.text)}</span>${on ? '<span class="vt-tick" aria-hidden="true">✓</span>' : ''}</button>`;
+  };
+  const blocked = dob ? (vaxView === 'private' ? PRIV_VAX() : ['Flu', 'COVID-19']).filter(v => checkEligibility(v, dob, S).state === 'blocked') : [];
+  const stop = blocked.length ? `<div class="notelig" role="alert"><span class="ni">✕</span><div><b>NOT ELIGIBLE BY AGE</b><span>Age ${age}. ${vaxView === 'private' ? 'Private vaccination is 18 and over.' : 'Flu and COVID at the pharmacy are 18 and over.'} Do not vaccinate.</span></div></div>` : '';
+  const ageChip = age != null ? `<span class="agechip ${age < 18 ? 'bad' : ''}">Age ${age}</span>` : '';
+  let html;
+  if (vaxView === 'private') {
+    html = `<div class="vhead"><button type="button" class="btn sm" data-vaxback>← Back</button><b class="vtitle priv">Private vaccination</b><span class="small muted">not recorded on RAVS</span><span class="sp"></span>${ageChip}</div>${stop}
+      <div class="vtiles two">${PRIV_VAX().map(v => tile(v, v, 'priv')).join('')}</div>`;
+  } else if (vaxView === 'other') {
+    html = `<div class="vhead"><button type="button" class="btn sm" data-vaxback>← Back</button><b class="vtitle">Other vaccines</b><span class="sp"></span>${ageChip}</div>
+      <div class="vtiles">${OTHER_VAX().map(v => tile(v)).join('')}</div>`;
+  } else {
+    const others = form.vaccines.filter(v => OTHER_VAX().includes(v));
+    html = `<div class="vhead"><span class="small muted">Choose one or more</span><span class="sp"></span>${ageChip}</div>${stop}
+      <div class="vtiles">${tile('Flu')}${tile('COVID-19', 'COVID')}
+        <button type="button" class="vtile priv" data-vaxview="private"><span class="vt-name">Private</span><span class="vt-state">${PRIV_VAX().map(v => `${esc(VACCINES[v].nhs === 'Flu' ? 'Flu' : 'COVID')} ${money(priceOf(v))}`).join(' · ')}</span></button>
+        <button type="button" class="vtile other" data-vaxview="other" aria-pressed="${others.length > 0}"><span class="vt-name">Other</span><span class="vt-state">${others.length ? esc(others.join(', ')) : esc(OTHER_VAX().map(v => VACCINES[v].short).join(', '))}</span>${others.length ? '<span class="vt-tick" aria-hidden="true">✓</span>' : ''}</button></div>`;
+  }
+  $('#vaxArea').innerHTML = html;
   const locs = S.locations || ['Pharmacy'], loc = $('#fLocation').value || store.get('psm.loc', locs[0]);
   $('#fLocation').innerHTML = locs.map(l => `<option ${l === loc ? 'selected' : ''}>${esc(l)}</option>`).join('');
   $('#srcPill').textContent = form.source; $('#srcPill').className = 'pill ' + (form.source === 'Booked' ? 'p-booked' : 'p-neutral');
@@ -426,24 +459,19 @@ function renderExtraSum() {
   if ($('#fNote').value.trim()) bits.push('note added');
   $('#extraSum').textContent = bits.length ? '· ' + bits.join(', ') : '';
 }
+// Only what still needs doing shows under the tiles: a reason to pick, or an age range to check.
 function renderElig() {
   const dob = parseDob($('#fDob').value);
   const box = $('#eligBox');
-  if (!form.vaccines.length) { box.innerHTML = '<div class="eline warn"><span class="ic">!</span><span>Choose at least one vaccine.</span></div>'; return; }
-  if (!dob) { box.innerHTML = ''; return; }
-  const line = (cls, ic, v, text) => `<div class="eline ${cls}"><span class="ic">${ic}</span><span><b>${esc(v)}</b> · ${esc(text)}</span></div>`;
+  if (!dob || !form.vaccines.length) { box.innerHTML = ''; return; }
   box.innerHTML = form.vaccines.map(v => {
-    const e = checkEligibility(v, dob, S); const cur = form.elig[v] || {};
-    let body = '';
-    if (e.state === 'age') body = line('ok', '✓', v, e.text);
-    else if (e.state === 'blocked') body = line('bad', '×', v, e.text);
-    else if (e.state === 'unknown') body = line('muted', '·', v, e.text);
-    else if (e.state === 'warn') body = line('warn', '!', v, e.text);
-    else if (e.state === 'reason') body = line('warn', '!', v, e.text) + `<div class="pair">
-      <select data-elig-reason="${esc(v)}" aria-label="Reason for ${esc(v)}"><option value="">Reason the patient gives…</option>${e.reasons.map(r => `<option ${cur.reason === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
-      <input data-elig-note="${esc(v)}" placeholder="Detail, e.g. condition" value="${esc(cur.note || '')}" aria-label="Detail for ${esc(v)}"></div>`;
-    else body = line('muted', '·', v, 'No age rule') + `<div class="pair"><input data-elig-note="${esc(v)}" placeholder="Eligibility or reason (optional)" value="${esc(cur.note || '')}" aria-label="Eligibility for ${esc(v)}"></div>`;
-    return `<div class="elig">${body}</div>`;
+    const e = checkEligibility(v, dob, S); const cur = form.elig[v] || {}, kind = vaxKind(v);
+    if (e.state === 'reason') return `<div class="rcard ${kind} ${cur.reason ? 'done' : ''}"><div class="rc-head"><b>${esc(VACCINES[v].short)}</b><span>${esc(e.text)}</span></div>
+      <select data-elig-reason="${esc(v)}" aria-label="Reason for ${esc(v)}"><option value="">Choose the reason the patient gives…</option>${e.reasons.map(r => `<option ${cur.reason === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
+      <input data-elig-note="${esc(v)}" placeholder="Detail, e.g. condition (optional)" value="${esc(cur.note || '')}" aria-label="Detail for ${esc(v)}"></div>`;
+    if (e.state === 'warn') return `<div class="rcard warnc"><div class="rc-head"><b>${esc(VACCINES[v].short)}</b><span>${esc(e.text)}</span></div></div>`;
+    if (e.state === 'free') return `<div class="rcard freec"><div class="rc-head"><b>${esc(v)}</b><span>No age rule</span></div><input data-elig-note="${esc(v)}" placeholder="Eligibility or reason (optional)" value="${esc(cur.note || '')}" aria-label="Eligibility for ${esc(v)}"></div>`;
+    return '';
   }).join('');
 }
 function renderDeskLists() {
@@ -669,9 +697,10 @@ function giveProblems() {
 }
 function updateGive() {
   // Before the patient is confirmed the buttons are hidden, and Enter in Find patient still starts the search.
-  const errs = form.step === 'confirmed' ? giveProblems() : [], wait = errs.filter(e => !/vaccinator on duty/.test(e));
-  $('#regBtn').disabled = errs.length > 0; $('#waitBtn').disabled = wait.length > 0;
+  const errs = form.step === 'confirmed' ? giveProblems() : [];
+  $('#regBtn').disabled = errs.length > 0;
   $('#giveHint').textContent = form.step === 'confirmed' && errs.length ? 'Still needed: ' + errs.join(' ') : '';
+  $('#regNeed').textContent = form.step === 'confirmed' && errs.length ? 'Still needed: ' + errs[0].replace(/\.$/, '') : '';
 }
 ['input', 'change', 'click'].forEach(type => document.addEventListener(type, () => setTimeout(updateGive), true));
 async function submitDesk(ev) {
@@ -689,7 +718,7 @@ async function submitDesk(ev) {
       vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S, v) : '', eligibility: VACCINES[v].private ? 'Private' : e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''), eligNote: el.note || '',
       consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? (isPriv(v) ? 'entered' : 'given') : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: given && isPriv(v) ? `${t} ${time}` : '', enteredBy: given && isPriv(v) ? PRIV_BY : '', note: f.note, updatedAt: now };
   });
-  $('#regBtn').disabled = $('#waitBtn').disabled = true;
+  $('#regBtn').disabled = true;
   try {
     await API.register({ rows, bookingVisitId: form.bookingVisitId });
     toast(`${f.given || f.surname || 'Patient'} ${given ? 'saved as vaccinated' : 'added to the waiting list'}`);
@@ -699,7 +728,7 @@ async function submitDesk(ev) {
 }
 function clearForm() {
   cancelFind(); findTimers.forEach(clearTimeout); findTimers = [];
-  $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' }; showMoreVax = false;
+  $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' }; vaxView = 'main';
   $('#nhsHint').textContent = ''; $('#dobHint').textContent = ''; $('#dupBox').innerHTML = '';
   renderDeskForm(); renderFind(); $('#fNhs').focus();
 }
@@ -727,7 +756,7 @@ function checkInBooking(visitId) {
   const r = v[0];
   clearForm();
   $('#fNhs').value = fmtNhs(r.nhs); $('#fDob').value = ukDate(r.dob); $('#fGiven').value = r.given; $('#fSurname').value = r.surname; $('#fPostcode').value = r.postcode || ''; $('#fPhone').value = r.phone || '';
-  form.vaccines = v.map(x => x.vaccine); form.source = 'Booked'; form.bookingVisitId = visitId;
+  form.vaccines = v.map(x => x.vaccine); form.source = 'Booked'; form.bookingVisitId = visitId; vaxView = form.vaccines.some(isPriv) ? 'private' : 'main';
   showTab('desk'); renderDeskForm(); onDobInput(); onNhsInput(); checkDuplicates();
   if (canSearch()) startFind(); else renderFind();
 }
@@ -740,7 +769,7 @@ function onNhsInput() {
 function onDobInput() {
   const d = parseDob($('#fDob').value), h = $('#dobHint');
   if (!$('#fDob').value) { h.textContent = ''; } else if (!d) { h.textContent = 'Use dd/mm/yyyy'; h.className = 'hint bad'; } else { h.textContent = `${longDate(d)}, age ${ageOn(d, todayIso())}`; h.className = 'hint ok'; }
-  renderElig();
+  renderDeskForm();
 }
 
 /* ---------- vaccinator ---------- */
@@ -795,7 +824,7 @@ function givenRow(v) {
   const r = v[0];
   return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub vx">${v.map(d => vaxTag(d, true)).join('')}</div>
     <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div></div>
-    <div class="right"><span class="pills">${[...new Set(v.filter(d => !isPriv(d)).map(d => d.status))].map(st => st === 'given' ? '' : statusPill(st)).join('')}</span><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button>${v.some(d => d.status === 'given' || (isPriv(d) && d.status === 'entered')) ? `<button type="button" class="btn sm ghost" data-undo="${esc(r.visitId)}" title="Back to waiting">Undo</button>` : ''}</div></div>`;
+    <div class="right"><span class="pills">${[...new Set(v.filter(d => !isPriv(d)).map(d => d.status))].map(st => st === 'given' ? '' : statusPill(st)).join('')}</span><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button></div></div>`;
 }
 function doseEditor(d) {
   const prods = (S.products || []).filter(p => p.vaccine === d.vaccine);
@@ -809,7 +838,7 @@ function doseEditor(d) {
     <div class="f"><label>Site</label><select data-k="site">${opt(SITES, d.site)}</select></div>
     <div class="f"><label>Consent</label><select data-k="consent">${opt(CONSENTS, d.consent)}</select></div>
     <div class="f"><label>Vaccinator</label><select data-k="vaccinator"><option value=""></option>${opt(S.vaccinators || [], d.vaccinator)}</select></div>
-    <div class="f"><label>Status</label><select data-k="status">${['waiting', 'given', 'entered', 'notgiven'].map(s => `<option value="${s}" ${s === d.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select></div>
+    <div class="f"><label>Status</label><select data-k="status">${[...(d.status === 'waiting' ? ['waiting'] : []), 'given', 'entered', 'notgiven'].map(s => `<option value="${s}" ${s === d.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select></div>
   </div></div>`;
 }
 async function giveVisit(visitId) {
@@ -1117,9 +1146,8 @@ document.addEventListener('click', async ev => {
   if (d.goto) return showTab(d.goto);
   if (d.vax) {
     const v = d.vax;
-    // Private flu replaces NHS flu (and the other way round); the same for COVID.
-    const pair = VACCINES[v].nhs || Object.keys(VACCINES).find(k => VACCINES[k].nhs === v);
-    form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines.filter(x => x !== pair), v];
+    // Private and NHS vaccines are never mixed in one visit.
+    form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines.filter(x => isPriv(x) === isPriv(v)), v];
     return renderDeskForm();
   }
   if ('find' in d) return startFind();
@@ -1129,7 +1157,8 @@ document.addEventListener('click', async ev => {
   if ('findskip' in d) return confirmPatient(false);
   if ('findno' in d) { form.step = 'find'; form.found = null; form.findMsg = 'Not the right patient. Check the details with the patient and search again.'; renderFind(); return $('#fNhs').focus(); }
   if ('findchange' in d) { form.step = 'find'; form.found = null; form.ravs = null; form.checked = false; renderFind(); return $('#fNhs').focus(); }
-  if ('morevax' in d) { showMoreVax = true; return renderDeskForm(); }
+  if (d.vaxview) { if (d.vaxview === 'private') form.vaccines = []; vaxView = d.vaxview; return renderDeskForm(); }
+  if ('vaxback' in d) { if (vaxView === 'private') form.vaccines = []; vaxView = 'main'; return renderDeskForm(); }
   if (d.toggleTodo) { openTodo.has(d.toggleTodo) ? openTodo.delete(d.toggleTodo) : openTodo.add(d.toggleTodo); return renderTodo(); }
   if (d.checkin) return checkInBooking(d.checkin);
   if (d.ravsvax) { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); return; }

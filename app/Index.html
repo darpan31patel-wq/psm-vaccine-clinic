@@ -104,7 +104,7 @@ main { padding-block: 20px 80px; }
 section.tab { display: none; }
 section.tab.on { display: block; }
 .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
-.grid2.desk { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; }
+.grid2.desk { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
 #box2 .group { margin-top: 14px; }
 #box2 details.extra { margin-top: 12px; }
 #box2 .actions { margin-top: 16px; }
@@ -147,6 +147,54 @@ section.tab.on { display: block; }
 .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .eligs { display: grid; gap: 10px; margin-top: 14px; }
 .eligs:empty { display: none; }
+/* Select vaccine: four big tiles; private and other open their own view with Back */
+.vhead { display: flex; align-items: center; gap: 10px; margin-top: 14px; min-height: 34px; flex-wrap: wrap; }
+.vhead .sp { flex: 1; }
+.vtitle { font-size: 17px; }
+.vtitle.priv { color: var(--priv); }
+.agechip { font-family: var(--font-mono); font-weight: 700; font-size: 14px; padding: 4px 12px; border-radius: 99px; background: var(--line-2); color: var(--ink); }
+.agechip.bad { background: var(--bad); color: #fff; }
+.vtiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.vtile { --c: var(--accent); position: relative; display: grid; gap: 4px; align-content: center; text-align: left; min-height: 84px; padding: 14px 16px; border-radius: 14px; cursor: pointer; font: inherit; color: var(--ink);
+  border: 2px solid color-mix(in srgb, var(--c) 35%, var(--line)); background: linear-gradient(150deg, color-mix(in srgb, var(--c) 12%, var(--surface)), var(--surface)); transition: transform .08s, box-shadow .12s; }
+.vtile:hover:not(:disabled) { box-shadow: 0 4px 14px color-mix(in srgb, var(--c) 25%, transparent); transform: translateY(-1px); }
+.vtile:focus-visible { outline: 3px solid var(--c); outline-offset: 2px; }
+.vtile.flu { --c: var(--flu); } .vtile.covid { --c: var(--covid); } .vtile.priv { --c: var(--priv); } .vtile.other, .vtile:not(.flu):not(.covid):not(.priv) { --c: var(--accent); }
+.vtile .vt-name { font-size: 22px; font-weight: 700; color: var(--c); line-height: 1.1; }
+.vtile .vt-state { font-size: 13.5px; color: var(--muted); font-weight: 700; }
+.vtile.e-ok .vt-state { color: var(--ok); }
+.vtile.e-warn .vt-state { color: var(--warn); }
+.vtile.priv.e-ok .vt-state { color: var(--priv); font-size: 15px; }
+.vtile[aria-pressed="true"] { background: var(--c); border-color: var(--c); box-shadow: 0 6px 18px color-mix(in srgb, var(--c) 35%, transparent); }
+.vtile[aria-pressed="true"] .vt-name, .vtile[aria-pressed="true"] .vt-state { color: #fff; }
+.vtile .vt-tick { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--c); display: grid; place-items: center; font-weight: 700; }
+.vtile.e-bad, .vtile:disabled { cursor: not-allowed; border-color: var(--bad); background: repeating-linear-gradient(135deg, var(--bad-soft) 0 10px, color-mix(in srgb, var(--bad-soft) 55%, var(--surface)) 10px 20px); transform: none; box-shadow: none; }
+.vtile.e-bad .vt-name { color: var(--bad); text-decoration: line-through; }
+.vtile.e-bad .vt-state { color: var(--bad); font-size: 14px; letter-spacing: .02em; }
+.notelig { display: flex; gap: 14px; align-items: center; margin-top: 12px; padding: 14px 16px; border-radius: 14px; background: var(--bad); color: #fff; animation: pop .25s ease-out; }
+.notelig .ni { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: var(--bad); display: grid; place-items: center; font-size: 22px; font-weight: 700; }
+.notelig b { display: block; font-size: 18px; letter-spacing: .03em; }
+.notelig span { font-size: 15px; }
+@keyframes pop { from { transform: scale(.97); opacity: .4; } to { transform: none; opacity: 1; } }
+.eligs:not(:empty) { display: grid; gap: 10px; margin-top: 12px; }
+.rcard { --c: var(--warn); display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--warn); background: var(--warn-soft); }
+.rcard.done { --c: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 70%, var(--surface)); }
+.rcard.freec { border: 1px solid var(--line); background: var(--surface-2); }
+.rcard.freec .rc-head { color: var(--muted); }
+.rcard .rc-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 14px; color: var(--warn); }
+.rcard.done .rc-head { color: var(--ok); }
+.rcard .rc-head b { font-size: 16px; color: var(--ink); }
+.rcard select, .rcard input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); width: 100%; font-size: 15px; }
+.rcard select { font-weight: 700; }
+#regBtn { display: grid; justify-items: center; gap: 2px; }
+#regBtn .need { font-size: 13px; font-weight: 400; opacity: .95; }
+#regBtn .need:empty { display: none; }
+#box2 .actions { flex-direction: column; align-items: stretch; }
+#box2 details.extra { text-align: center; }
+/* previous entries: full width under the two main boxes, quieter colour */
+.panel.today { --tint: #7a8a99; margin-top: 20px; }
+.panel.today h2 { font-size: 17px; color: var(--muted); display: flex; align-items: baseline; gap: 10px; }
+.hsub { font-size: 13px; font-weight: 400; color: var(--faint); }
 .elig { display: grid; gap: 8px; }
 .eline { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
 .eline .ic { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; transform: translateY(3px); }
@@ -259,7 +307,7 @@ details.extra .fields { margin-top: 14px; }
 .panel { --tint: var(--accent); border-top: 3px solid var(--tint); border-color: color-mix(in srgb, var(--tint) 22%, var(--line)); border-top-color: var(--tint); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 24%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 9%, var(--surface)) 40%, color-mix(in srgb, var(--tint) 3%, var(--surface)) 100%); box-shadow: 0 1px 2px rgba(20, 35, 42, .04), 0 6px 18px color-mix(in srgb, var(--tint) 12%, transparent); }
 #box2 { --tint: var(--flu); }
 #box2 .num { background: var(--flu); }
-.panel.today { --tint: var(--ok); }
+
 #tab-bookings .panel { --tint: var(--info); }
 #tab-todo .panel { --tint: var(--warn); }
 #tab-private .panel { --tint: var(--priv); }
@@ -465,15 +513,13 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
         <div class="hrow"><h2><span class="num">2</span>Select vaccine</h2></div>
         <p class="lede" id="box2Locked">Find and confirm the patient first.</p>
         <div id="box2Body" hidden>
-          <div class="group">
-            <div class="glabel">Vaccines</div>
-            <div class="vaxpick" id="vaxMain"></div>
-            <div class="vaxpick" id="vaxMore" style="margin-top:8px"></div>
-            <div class="glabel" style="margin-top:14px">Private <span>not recorded on RAVS</span></div>
-            <div class="vaxpick" id="vaxPriv"></div>
-            <div class="eligs" id="eligBox"></div>
-          </div>
+          <div id="vaxArea"></div>
+          <div class="eligs" id="eligBox"></div>
 
+
+          <div id="dupBox"></div>
+          <p class="small" id="giveHint" hidden></p>
+          <div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given"><span class="bl">Vaccinated</span><small class="need" id="regNeed"></small></button></div>
           <details class="extra" id="extraBox">
             <summary>Phone, note or location <span class="muted" id="extraSum"></span></summary>
             <div class="fields">
@@ -482,21 +528,18 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
               <div class="f"><label for="fNote">Note for the vaccinator</label><input id="fNote"></div>
             </div>
           </details>
-
-          <div id="dupBox"></div>
-          <p class="small" id="giveHint" style="margin:10px 0 0;color:var(--bad)"></p><div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given">Vaccinated</button><button class="btn ghost sm" type="submit" id="waitBtn" data-mode="waiting">Not vaccinated yet, add to waiting list</button></div>
         </div>
       </section>
 
+    </div>
+  </form>
     <div class="panel today">
-      <div class="hrow"><h2>Today</h2><span class="sp"></span><span class="summary" id="deskSummary" style="margin:0"></span></div>
-      <div id="waitWrap"><h3 class="sect">Waiting <span id="waitCount" style="font-weight:400"></span></h3>
+      <div class="hrow"><h2>Previous entries <span class="hsub">today, for checking</span></h2><span class="sp"></span><span class="summary" id="deskSummary" style="margin:0"></span></div>
+      <div id="waitWrap"><h3 class="sect">Not vaccinated yet <span id="waitCount" style="font-weight:400"></span></h3>
       <div class="list waitlist" id="waitList"></div></div>
       <h3 class="sect">Vaccinated today <span id="givenCount" style="font-weight:400"></span></h3>
       <div class="list givenbox" id="givenList"></div>
     </div>
-    </div>
-  </form>
 </section>
 
 <!-- BOOKINGS -->
