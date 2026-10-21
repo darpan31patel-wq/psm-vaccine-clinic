@@ -81,6 +81,7 @@ The app itself needs the internet to open. If it won't open, carry on with Offli
 
 - **Nightly backup:** every night at about 2am, Google copies every tab of the app data sheet into a new sheet in the Drive folder **PSM Clinic backups**. The newest 30 are kept. The time of the last backup is at the bottom of Settings.
 - **Change log:** the **Changes** tab in the app data sheet lists every save, edit, delete and settings change, with who (the Operator) and when.
+- **RAVS Helper to install:** the same folder always holds the latest helper as **PSM RAVS Helper _version_.zip**. Download it on any computer and follow `ravs-helper/INSTALL.md`. The bottom of Settings shows the version, and says when a computer's helper is older.
 - **App copy:** the same Drive folder holds **App copy - Index.html** and **App copy - app.js**. The app uses them if GitHub can't be reached. They update by themselves. Don't edit or delete them.
 
 To turn the nightly backup on (once):

@@ -19,6 +19,8 @@ const COLS = ['id', 'visitId', 'date', 'time', 'source', 'nhs', 'surname', 'give
 // Leave UPDATE_URL empty to always use the Index file pasted into this project.
 const UPDATE_URL = 'https://raw.githubusercontent.com/darpan31patel-wq/psm-vaccine-clinic/main/app/Index.html';
 const CODE_URL = 'https://raw.githubusercontent.com/darpan31patel-wq/psm-vaccine-clinic/main/app/app.js';
+const HELPER_MANIFEST_URL = 'https://raw.githubusercontent.com/darpan31patel-wq/psm-vaccine-clinic/main/ravs-helper/manifest.json';
+const REPO_ZIP_URL = 'https://github.com/darpan31patel-wq/psm-vaccine-clinic/archive/refs/heads/main.zip';
 
 function doGet() {
   setup_();
@@ -42,7 +44,7 @@ function screenHtml_() {
     const html = res.getContentText();
     if (res.getResponseCode() !== 200 || html.indexOf('psm-clinic-app') < 0) return local();
     if (html.length < 90000) cache.put('screen', html, 300); // cache values are capped at 100KB
-    if (!cache.get('copyChecked')) { cache.put('copyChecked', '1', 600); try { saveAppCopy_(html); } catch (e) { console.warn(e); } }
+    if (!cache.get('copyChecked')) { cache.put('copyChecked', '1', 600); try { saveAppCopy_(html); } catch (e) { console.warn(e); } try { saveHelperCopy_(); } catch (e) { console.warn(e); } }
     return html;
   } catch (e) {
     return local();
@@ -88,6 +90,29 @@ function saveAppCopy_(html) {
   p.setProperty('copyAt', new Date().toISOString());
   return true;
 }
+/**
+ * Keeps the latest RAVS Helper in the backups folder as "PSM RAVS Helper <version>.zip", ready to install on any
+ * computer. Only downloads when the helper's version on GitHub changes; older helper zips are moved to the bin.
+ */
+function saveHelperCopy_() {
+  const res = UrlFetchApp.fetch(HELPER_MANIFEST_URL, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) return false;
+  const version = String(JSON.parse(res.getContentText()).version || '');
+  const name = 'PSM RAVS Helper ' + version + '.zip';
+  const folder = backupFolder_();
+  if (!version || folder.getFilesByName(name).hasNext()) return true;
+  const zip = UrlFetchApp.fetch(REPO_ZIP_URL, { muteHttpExceptions: true });
+  if (zip.getResponseCode() !== 200) return false;
+  // The GitHub zip holds the whole project in one top folder; keep only its ravs-helper folder.
+  const files = Utilities.unzip(zip.getBlob()).filter(b => /^[^/]+\/ravs-helper\/.+[^/]$/.test(b.getName()))
+    .map(b => b.setName(b.getName().replace(/^[^/]+\//, '')));
+  if (!files.some(b => b.getName() === 'ravs-helper/manifest.json')) return false;
+  folder.createFile(Utilities.zip(files, name));
+  const it = folder.getFiles();
+  while (it.hasNext()) { const f = it.next(); if (f.getName().indexOf('PSM RAVS Helper ') === 0 && f.getName() !== name) f.setTrashed(true); }
+  PropertiesService.getScriptProperties().setProperty('helperVersion', version);
+  return true;
+}
 /** The app code from the Drive copy, for when GitHub and jsDelivr can't be reached from the computer. */
 function apiAppCode() { return driveCopy_('app.js'); }
 
@@ -115,6 +140,7 @@ function nightlyBackup() {
   old.sort((a, b) => b.getDateCreated() - a.getDateCreated()).slice(KEEP_BACKUPS).forEach(f => f.setTrashed(true));
   PropertiesService.getScriptProperties().setProperty('backupAt', new Date().toISOString());
   try { saveAppCopy_(); } catch (e) { console.warn(e); }
+  try { saveHelperCopy_(); } catch (e) { console.warn(e); }
 }
 
 /** Run once from the editor (or it runs on first open) to create the sheets. */
@@ -208,7 +234,7 @@ function apiBoard(clientVersion, today) {
   });
   const days = Object.keys(byDay).map(k => byDay[k]).sort((a, b) => b.date.localeCompare(a.date));
   const p = PropertiesService.getScriptProperties();
-  return { version: v, settings: settings_(), rows: live, days: days, backupAt: p.getProperty('backupAt') || '', copyAt: p.getProperty('copyAt') || '' };
+  return { version: v, settings: settings_(), rows: live, days: days, backupAt: p.getProperty('backupAt') || '', copyAt: p.getProperty('copyAt') || '', helperVersion: p.getProperty('helperVersion') || '' };
 }
 
 function apiRegister(visit, meta) {
