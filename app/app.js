@@ -1170,6 +1170,8 @@ const RC_FIELDS = [
 ];
 const rcKind = v => { const s = String(v || '').toLowerCase(); return /covid|sars|comirnaty|spikevax|nuvaxovid|kostaive/.test(s) ? 'covid' : /flu|influenza|laiv|tiv|qiv/.test(s) ? 'flu' : /mmr|measles/.test(s) ? 'mmr' : /menb|mening|bexsero/.test(s) ? 'menb' : /pneum|ppv/.test(s) ? 'ppv' : s ? 'other' : ''; };
 const RC_KIND_LABEL = { flu: 'Flu', covid: 'COVID', mmr: 'MMR', menb: 'MenB', ppv: 'PPV', other: 'Other', '': '' };
+const RC_EXTRA = { postcode: /^postcode$/, address: /^address$/, phone: /^(contactdetails|phone|telephone|mobile)$/, gp: /^registeredgp(odscode)?$/, gender: /^gender$/,
+  product: /^vaccineproduct$/, batch: /^batch(number)?$/, eligibility: /^eligibilitytype$/, vaccinator: /^vaccinatingclinician$/, entered: /^dateentered$/, comments: /^vaccinationcomments$/ };
 let RC = null; // { head, rows, map, from, to, result }
 
 function rcCell(v) {
@@ -1223,14 +1225,17 @@ function rcGuess(rows) {
   const col = re => head.findIndex(h => re.test(h.toLowerCase().replace(/[\s_\-]+/g, '')));
   const vi = col(/^vaccinated$/), ai = col(/^audittype$/);
   const data = rows.slice(hi + 1).filter(r => !(vi >= 0 && /^(no|false|n)$/i.test(String(r[vi] || '').trim())) && !(ai >= 0 && /delet/i.test(String(r[ai] || ''))));
-  return { head, data, map };
+  // Extra RAVS columns, used when copying RAVS entries into the app.
+  const extra = {}; Object.entries(RC_EXTRA).forEach(([k, re]) => { const i = col(re); if (i >= 0) extra[k] = i; });
+  return { head, data, map, extra };
 }
 function rcRecords() {
   const { data, map } = RC, get = (r, k) => map[k] == null ? '' : String(r[map[k]] ?? '').trim();
   return data.map(r => {
     let surname = get(r, 'surname'), given = get(r, 'given');
     if (!surname && get(r, 'name')) { const n = get(r, 'name'); if (n.includes(',')) [surname, given] = n.split(',').map(x => x.trim()); else { const p = n.split(/\s+/); surname = p.pop() || ''; given = p.join(' '); } }
-    return { nhs: cleanNhs(get(r, 'nhs')), date: rcDate(get(r, 'date')), dob: rcDate(get(r, 'dob')) || parseDob(get(r, 'dob')) || '', surname: surname.toUpperCase(), given: titleCase(given), vaccineText: get(r, 'vaccine'), kind: rcKind(get(r, 'vaccine')) };
+    const x = {}; Object.entries(RC.extra || {}).forEach(([k, i]) => x[k] = String(r[i] ?? '').trim());
+    return { nhs: cleanNhs(get(r, 'nhs')), date: rcDate(get(r, 'date')), dob: rcDate(get(r, 'dob')) || parseDob(get(r, 'dob')) || '', surname: surname.toUpperCase(), given: titleCase(given), vaccineText: get(r, 'vaccine'), kind: rcKind(get(r, 'vaccine')), x };
   }).filter(r => r.date && (r.nhs || r.surname));
 }
 const rcSamePerson = (a, b) => (a.nhs && b.nhs) ? a.nhs === b.nhs : !!(a.surname && a.dob && a.surname.toUpperCase() === b.surname.toUpperCase() && a.dob === b.dob);
@@ -1322,25 +1327,62 @@ async function rcRun() {
   const app = (await API.exportRows(from, to)).filter(r => !isPriv(r) && (r.status === 'given' || r.status === 'entered') && (VACCINES[r.vaccine]?.target || 'RAVS') === 'RAVS')
     .map(r => ({ ...r, kind: rcKind(VACCINES[r.vaccine]?.ravs || r.vaccine) }));
   const res = RC.result = rcCompare(ravs, app);
+  // Patients from before the app was used are in the old season sheet (Recall tab). Those count as accounted for.
+  let recall = []; try { recall = await API.recallGet(); } catch (e) { console.warn(e); }
+  const inSheet = rcInOldSheet(recall);
+  res.oldSheet = res.ravsOnly.filter(inSheet); res.ravsOnly = res.ravsOnly.filter(p => !inSheet(p));
+  const addable = res.ravsOnly.concat(res.oldSheet).filter(p => RC_KIND_VAX[p.kind]);
   const t = todayIso(), late = d => daysBetween(d.date, t) > 15;
   const tile = (k, n, c) => `<div class="tile ${c}"><div class="k">${k}</div><div class="n">${n}</div></div>`;
   const line = (p, extra = '') => `<div class="row"><div class="time">${esc(ukDate(p.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(p))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(p.dob))}</span><span class="mono f f-nhs">${esc(fmtNhs(p.nhs) || 'No NHS number')}</span>${extra}</div></div><div class="right">${p.kind ? `<span class="vtag ${p.kind}">${esc(RC_KIND_LABEL[p.kind])}</span>` : ''}</div></div>`;
   const appLine = d => line(d, `${d.vaccinator ? `<span class="f f-vac">${esc(d.vaccinator)}</span>` : ''}${late(d) ? '<span class="f" style="color:var(--bad);font-weight:700">Over 15 days, can\'t be claimed</span>' : ''}`);
   const group = (title, cls, items, render, help) => `<div class="rcgroup ${cls}"><h3>${title} <span class="count">${items.length}</span></h3><p class="small muted">${help}</p><div class="list">${items.map(render).join('')}</div></div>`;
   const issues = res.appOnly.length + res.ravsOnly.length + res.moved.length;
+  const addBtn = (items, label) => items.length ? `<div class="rcadd"><button type="button" class="btn sm primary" data-rcadd="${items === res.oldSheet ? 'old' : 'ravs'}">${label}</button><span class="small muted">They're added as already On RAVS, with the details from the RAVS file.</span></div>` : '';
   $('#rcOut').innerHTML = `<div class="statusline ${issues ? 'off' : 'on'}">${ukDate(from)} to ${ukDate(to)}: ${issues ? `${issues} to look at` : 'everything matches'}</div>
-    <div class="tiles rctiles">${tile('Matched', res.matched.length + res.moved.length, 'ok')}${tile('In the app, not on RAVS', res.appOnly.length, res.appOnly.length ? 'bad' : 'ok')}${tile('On RAVS, not in the app', res.ravsOnly.length, res.ravsOnly.length ? 'warn' : 'ok')}${tile('Different date', res.moved.length, res.moved.length ? 'warn' : 'ok')}</div>
+    <div class="tiles rctiles">${tile('Matched', res.matched.length + res.moved.length, 'ok')}${tile('In the app, not on RAVS', res.appOnly.length, res.appOnly.length ? 'bad' : 'ok')}${tile('On RAVS, not in the app', res.ravsOnly.length, res.ravsOnly.length ? 'warn' : 'ok')}${tile('Different date', res.moved.length, res.moved.length ? 'warn' : 'ok')}${res.oldSheet.length ? tile('In your old sheet', res.oldSheet.length, '') : ''}</div>
     ${res.appOnly.length ? group('In the app, not on RAVS', 'bad', res.appOnly, appLine, 'Given here but missing from the RAVS file. Enter these on RAVS (Edit, then Fill in RAVS again).') : ''}
-    ${res.ravsOnly.length ? group('On RAVS, not in the app', 'warn', res.ravsOnly, p => line(p, p.vaccineText ? `<span class="f">${esc(p.vaccineText)}</span>` : ''), 'On RAVS but not registered here. Could be another site, or a patient who skipped the desk. Register them if they were vaccinated here.') : ''}
+    ${res.ravsOnly.length ? group('On RAVS, not in the app', 'warn', res.ravsOnly, p => line(p, p.vaccineText ? `<span class="f">${esc(p.vaccineText)}</span>` : ''), 'On RAVS but not registered in the app (or the old sheet). If they were vaccinated here, add them to the app.') + addBtn(res.ravsOnly.filter(p => RC_KIND_VAX[p.kind]), `Add ${res.ravsOnly.length === 1 ? 'it' : 'all ' + res.ravsOnly.length} to the app`) : ''}
+    ${res.oldSheet.length ? `<details class="rcgroup rcold"><summary><h3>In your old sheet, not in the app <span class="count">${res.oldSheet.length}</span></h3></summary><p class="small muted">On RAVS and in the old season sheet (Recall tab), from before you used the app. Nothing missing. Add them so the app has the whole season.</p><div class="list">${res.oldSheet.map(p => line(p)).join('')}</div></details>${addBtn(res.oldSheet, `Add ${res.oldSheet.length === 1 ? 'it' : 'all ' + res.oldSheet.length} to the app`)}` : ''}
     ${res.moved.length ? group('Different date', 'warn', res.moved, m => line(m.app, `<span class="f">App ${esc(ukDate(m.app.date))}, RAVS ${esc(ukDate(m.ravs.date))}</span>`), 'Same patient and vaccine, but the dates differ. Check which one is right.') : ''}
     ${res.notMarked.length ? `<div class="alert info rcmark"><span>${res.notMarked.length} matched ${res.notMarked.length === 1 ? 'vaccination shows' : 'vaccinations show'} "Not on RAVS yet" in the app.</span><button type="button" class="btn sm" id="rcMark">Mark ${res.notMarked.length === 1 ? 'it' : 'them'} as On RAVS</button></div>` : ''}
     ${pick}`;
   rcBindMap();
+  $$('[data-rcadd]').forEach(b => b.addEventListener('click', () => rcAdd(b, (b.dataset.rcadd === 'old' ? res.oldSheet : res.ravsOnly).filter(p => RC_KIND_VAX[p.kind]))));
   $('#rcMark')?.addEventListener('click', async () => {
     $('#rcMark').disabled = true;
     await API.update(res.notMarked.map(m => m.app.id), { status: 'entered', enteredAt: `${todayIso()} ${nowTime()}`, enteredBy: me || 'RAVS check' });
     toast('Marked as On RAVS'); await refresh(true); rcRun();
   });
+}
+const RC_KIND_VAX = { flu: 'Flu', covid: 'COVID-19', mmr: 'MMR', menb: 'MenB' };
+// Recall people with this vaccine in the same season, by NHS number or surname + date of birth.
+function rcInOldSheet(recall) {
+  const by = new Map();
+  (recall || []).forEach(p => { const h = historyMap(p.history); [cleanNhs(p.nhs), nameKey(p)].forEach(k => { if (k && k.length > 2) by.set(k, h); }); });
+  return p => { const h = by.get(p.nhs) || by.get(nameKey(p)); const set = h && h[seasonOf(p.date)]; return !!set && set.has(RC_KIND_VAX[p.kind] || ''); };
+}
+// Copies RAVS entries into the app as vaccinations already on RAVS. Doses for the same person on the same day are one visit.
+async function rcAdd(btn, items) {
+  if (!me) return flashOperator();
+  if (!items.length) return;
+  btn.disabled = true; btn.textContent = `Adding ${items.length}…`;
+  const visits = {}, now = new Date().toISOString();
+  const rows = items.map(p => {
+    const x = p.x || {}, vk = (p.nhs || nameKey(p)) + '|' + p.date;
+    const ent = rcDate(x.entered), entTime = (String(x.entered || '').match(/(\d{1,2}:\d{2})/) || [])[1] || '';
+    const note = [x.gender ? `Gender: ${x.gender}.` : '', x.comments, 'Added from the RAVS export.'].filter(Boolean).join(' ');
+    return { id: uid(), visitId: visits[vk] ||= uid(), date: p.date, time: '', source: 'From RAVS', nhs: p.nhs, surname: p.surname, given: p.given, dob: p.dob,
+      postcode: fmtPostcode(x.postcode || ''), phone: x.phone || '', vaccine: RC_KIND_VAX[p.kind], product: x.product || p.vaccineText, batch: x.batch || '',
+      eligibility: x.eligibility || '', eligNote: '', consent: '', site: '', vaccinator: x.vaccinator || '', deskBy: me, location: 'Pharmacy', status: 'entered',
+      givenAt: p.date, enteredAt: ent ? `${ent} ${entTime}`.trim() : `${p.date}`, enteredBy: 'RAVS export', note, updatedAt: now, address: x.address || '', gp: x.gp || '' };
+  });
+  try {
+    const byVisit = {}; rows.forEach(r => (byVisit[r.visitId] ||= []).push(r));
+    const groups = Object.values(byVisit);
+    for (let i = 0; i < groups.length; i += 150) await API.register({ rows: groups.slice(i, i + 150).flat() });
+    toast(`${rows.length} added to the app from RAVS`); await refresh(true); rcRun();
+  } catch (e) { console.warn(e); btn.disabled = false; btn.textContent = 'Try again'; toast("Couldn't add them: " + (e && e.message || e)); }
 }
 function rcBindMap() { $$('[data-rcmap]').forEach(s => s.onchange = () => { s.value === '' ? delete RC.map[s.dataset.rcmap] : RC.map[s.dataset.rcmap] = +s.value; rcRun(); }); }
 

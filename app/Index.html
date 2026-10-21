@@ -468,6 +468,9 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 .rcget { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; padding: 16px; border-radius: 14px; background: linear-gradient(135deg, var(--flu-soft), var(--surface) 70%); border: 1px solid color-mix(in srgb, var(--flu) 25%, var(--line)); }
 .rcget-t { display: grid; gap: 2px; flex: 1 1 240px; } .rcget-t b { font-size: 16px; color: var(--flu); } .rcget-t span { font-size: 13.5px; color: var(--muted); }
 .rcget .f { margin: 0; }
+.rcadd { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 2px 0 6px 18px; }
+.rcold { border-left-color: var(--faint); } .rcold summary { cursor: pointer; list-style: none; } .rcold summary::-webkit-details-marker { display: none; } .rcold h3 { color: var(--muted); }
+.rcold summary h3::after { content: '\25B8  show'; font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 6px; } .rcold[open] summary h3::after { content: '\25BE  hide'; }
 .rcmap summary { cursor: pointer; font-size: 13.5px; color: var(--muted); font-weight: 700; }
 .rcmap .editgrid { margin-top: 10px; }
 .statusline { font-weight: 700; font-size: 14px; padding: 8px 12px; border-radius: 10px; }
