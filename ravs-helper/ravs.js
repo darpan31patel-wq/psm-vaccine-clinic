@@ -37,6 +37,7 @@
   function radioWhere(pred) { return radios().find(r => pred(labelText(r), r)); }
   // RAVS shows user names as typed (e.g. lower case, a letter short), so match each word on its first letters.
   const nameLike = (label, want) => { const ws = want.split(' ').filter(Boolean); return ws.length > 1 && ws.every(w => label.includes(w.slice(0, Math.max(3, Math.min(w.length, 5))))); };
+  const nonClinical = () => radioWhere(l => /\bnon[- ]?clinical\b/.test(l));
   function radioLabel(text) { const t = norm(text); return radioWhere(l => l === t); }
   function setValue(el, v) {
     const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -118,6 +119,7 @@
     if (/where did you give/.test(h)) return 'site';
     if (/check and confirm/.test(h)) return 'confirm';
     if (/^\/record-vaccinations$/.test(path())) return 'start';
+    if (nonClinical()) return 'hcwRole';
     return 'unknown';
   }
 
@@ -206,6 +208,16 @@
     },
     async eligibility(job) {
       if (!choose(radioLabel(job.eligibility))) return { wait: `Pick the reason (app says "${job.eligibility || 'none'}"), then press Continue.` };
+      // Healthcare worker opens a follow-up question on the same page: always the non-clinical option.
+      if (norm(job.eligibility) === 'healthcare worker') {
+        await sleep(300);
+        choose(nonClinical());
+      }
+      return { go: true };
+    },
+    // If RAVS asks about the healthcare worker role on its own page instead.
+    async hcwRole(job) {
+      if (norm(job.eligibility) !== 'healthcare worker' || !choose(nonClinical())) return { wait: 'Pick the non-clinical option, then press Continue.' };
       return { go: true };
     },
     async consent(job) {
