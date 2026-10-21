@@ -294,18 +294,73 @@ function searchRows(rows, q, seasonStart) {
   )).slice(-80).reverse();
 }
 
+/* Save queue: a patient save that can't reach Google (internet or Google down) is kept in this computer's Chrome and
+   sent again, in order, as soon as it can be. Each save carries the operator's name for the Changes tab. */
+const OUTBOX_KEY = 'psm.outbox';
+let outboxErr = '', flushing = false;
+const outbox = () => store.get(OUTBOX_KEY, []);
+function setOutbox(list) { localStorage.setItem(OUTBOX_KEY, JSON.stringify(list)); }
+function queued(fn) {
+  return (...args) => {
+    const job = { id: uid(), fn, args, who: me, at: new Date().toISOString() };
+    const keep = e => {
+      setOutbox(outbox().concat([job])); // throws if Chrome won't store it, so the save shows as failed instead of vanishing
+      outboxErr = String((e && (e.message || e)) || '');
+      applyOutbox(); renderAll(false); renderOutbox();
+      setTimeout(() => toast('No connection to Google. Saved on this computer and it will be sent automatically.'), 1200);
+      return { ok: true, queued: true };
+    };
+    // Saves already waiting go first, so changes reach Google in the order they were made.
+    if (outbox().length) { const out = keep(null); flushOutbox(); return Promise.resolve(out); }
+    return gas(fn, ...args, { who: me }).catch(keep);
+  };
+}
+async function flushOutbox() {
+  if (!hasGas || flushing || !outbox().length) return;
+  flushing = true;
+  let sent = 0;
+  try {
+    for (let job = outbox()[0]; job; job = outbox()[0]) {
+      await gas(job.fn, ...job.args, { who: job.who });
+      setOutbox(outbox().filter(j => j.id !== job.id)); sent++;
+    }
+    outboxErr = '';
+  } catch (e) { outboxErr = String((e && (e.message || e)) || ''); }
+  finally { flushing = false; renderOutbox(); }
+  if (sent && !outbox().length) { toast(`Connection back: ${sent === 1 ? 'the waiting save was' : `${sent} waiting saves were`} sent to Google`); refresh(true); }
+}
+// Shows saves still waiting on this computer in the board's rows, so nobody thinks they're lost.
+function applyOutbox() {
+  outbox().forEach(j => {
+    if (j.fn === 'apiRegister') (j.args[0].rows || []).forEach(r => { if (!ROWS.some(x => x.id === r.id)) ROWS.push(Object.assign({}, r)); });
+    const changes = j.fn === 'apiUpdate' ? j.args[0].map(id => ({ id, patch: j.args[1] })) : j.fn === 'apiUpdateEach' ? j.args[0] : [];
+    changes.forEach(c => { const r = ROWS.find(x => x.id === c.id); if (r) Object.assign(r, c.patch); });
+  });
+  ROWS = ROWS.filter(r => r.status !== 'deleted');
+}
+function renderOutbox() {
+  const n = outbox().length;
+  if (!n) return;
+  $('#syncDot').classList.add('off'); $('#syncBox').classList.add('bad');
+  $('#syncText').textContent = `${n} waiting to save`;
+  $('#syncBox').title = `${n} ${n === 1 ? 'save is' : 'saves are'} kept on this computer and will be sent to Google automatically when the connection is back. Don't clear Chrome's browsing data until this goes.` + (outboxErr ? ` Last problem: ${outboxErr}` : '');
+}
+setInterval(flushOutbox, 15000);
+window.addEventListener('online', flushOutbox);
+
+const meta = () => ({ who: me });
 const API = hasGas ? {
   board: (v, t) => gas('apiBoard', v, t),
-  register: v => gas('apiRegister', v),
-  update: (ids, p) => gas('apiUpdate', ids, p),
-  updateEach: c => gas('apiUpdateEach', c),
-  importBookings: r => gas('apiImportBookings', r),
+  register: queued('apiRegister'),
+  update: queued('apiUpdate'),
+  updateEach: queued('apiUpdateEach'),
+  importBookings: r => gas('apiImportBookings', r, meta()),
   search: (q, s) => gas('apiSearch', q, s),
-  saveSettings: s => gas('apiSaveSettings', s),
+  saveSettings: s => gas('apiSaveSettings', s, meta()),
   exportRows: (f, t) => gas('apiExport', f, t),
   recallGet: () => gas('apiRecallGet'),
-  recallSave: p => gas('apiRecallSave', p),
-  recallContact: (k, p) => gas('apiRecallContact', k, p),
+  recallSave: p => gas('apiRecallSave', p, meta()),
+  recallContact: (k, p) => gas('apiRecallContact', k, p, meta()),
 } : Demo;
 
 /* ===================== state ===================== */
@@ -319,13 +374,17 @@ let offline = !!store.get('psm.offline', false);
 let todoFilter = 'All';
 let editing = null;
 
+let BACKUP = {};
 async function refresh(force) {
   try {
     const b = await API.board(force ? -1 : VERSION, todayIso());
     setSync(true);
+    if (outbox().length) VERSION = -1; // keep fetching fresh rows until the waiting saves are in
     if (b.unchanged) return;
     const sj = JSON.stringify(b.settings || {}), settingsChanged = sj !== refresh._sj; refresh._sj = sj;
     VERSION = b.version; S = Object.assign({}, DEFAULT_SETTINGS, b.settings || {}); ROWS = (b.rows || []).filter(r => r.status !== 'deleted'); DAYS = b.days || [];
+    if (hasGas) applyOutbox();
+    BACKUP = { at: b.backupAt || '', copyAt: b.copyAt || '' }; renderBuild();
     // Settings saved before private vaccines existed have no private stock rows yet.
     DEFAULT_SETTINGS.products.filter(p => VACCINES[p.vaccine]?.private && !S.products.some(x => x.vaccine === p.vaccine)).forEach(p => S.products = S.products.concat([Object.assign({}, p)]));
     await loadMore();
@@ -371,7 +430,13 @@ function renderPrivate() {
         <div class="right">${vaxTag(r)}<span class="mono small">${esc(r.batch || 'no batch')}</span><span class="small muted">${money(priceOf(r.vaccine))}</span></div></div>`).join('')}</div>`;
   }).join('') : '<div class="panel empty">No private vaccinations yet this season.</div>';
 }
-function setSync(ok, e) { $('#syncDot').classList.toggle('off', !ok); $('#syncBox').classList.toggle('bad', !ok); $('#syncText').textContent = ok ? 'Live' : 'Not saving, retrying'; if (!ok) { console.warn(e); showError(e); } }
+function setSync(ok, e) {
+  $('#syncDot').classList.toggle('off', !ok); $('#syncBox').classList.toggle('bad', !ok); $('#syncText').textContent = ok ? 'Live' : 'Not saving, retrying'; $('#syncBox').title = 'Live sync';
+  // While saves are waiting on this computer, the header badge says so; the red banner is only for other problems.
+  if (!ok) { console.warn(e); if (!outbox().length) { showError(e); setSync.shown = true; } }
+  else if (setSync.shown) { $('#appError').hidden = true; setSync.shown = false; }
+  renderOutbox();
+}
 // Any error is shown at the top in words, so a screenshot says what went wrong.
 function showError(e) { const m = String((e && (e.message || e)) || 'Unknown error'); const b = $('#appError'); b.innerHTML = `<div class="wrap">Something went wrong: ${esc(m)}. Reload this page (Cmd+R). If it keeps happening, send a screenshot of this line.</div>`; b.hidden = false; }
 window.addEventListener('error', ev => showError(ev.error || ev.message));
@@ -1668,8 +1733,12 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 3';
-function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
+const BUILD = '21 Oct 2026, 4';
+const whenUk = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${ukDate(isoDate(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+function renderBuild() {
+  const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups")` : ' · Nightly backup not turned on yet';
+  $('#buildInfo').textContent = `App version ${BUILD}${window.PSM_LOADED_FROM ? ` (from the ${window.PSM_LOADED_FROM}: GitHub could not be reached)` : ''} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : EXT.error ? EXT.error : 'not installed on this computer'}${backup}`;
+}
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
 const canAskRavs = () => EXT.ready && !verLt(EXT.version, '0.4.0');
@@ -1758,3 +1827,4 @@ showTab(store.get('psm.tab', 'desk'));
 refresh(true);
 window.postMessage({ psm: 'app-hello' }, '*');
 setInterval(() => { if (!editing && document.visibilityState === 'visible') refresh(false); }, hasGas ? 12000 : 4000);
+flushOutbox();

@@ -2,7 +2,19 @@
 (function () {
   if (window.__psmBridge) return;
   window.__psmBridge = true;
-  const isApp = () => !!document.getElementById('psm-clinic-app');
+  // Only the clinic app the helper is linked to (checked by the helper from the tab's address) gets any patient details.
+  let trusted = false, refused = false, asking = false;
+  const isApp = () => trusted && !!document.getElementById('psm-clinic-app');
+  function checkApp() {
+    if (trusted || refused || asking || !document.getElementById('psm-clinic-app')) return;
+    asking = true;
+    chrome.runtime.sendMessage({ type: 'check-app' }, res => {
+      asking = false;
+      if (chrome.runtime.lastError || !res) return;
+      if (res.ok) { trusted = true; announce(); sendDone(); sendLookups(); sendVaccinators(); seen(); }
+      else { refused = true; if (res.why) window.postMessage({ psm: 'ext-error', message: res.why }, '*'); }
+    });
+  }
 
   function announce() { if (isApp()) window.postMessage({ psm: 'ext-ready', version: chrome.runtime.getManifest().version }, '*'); }
   function sendLookups() {
@@ -35,7 +47,7 @@
   // Apps Script writes the app into this frame with document.write, which removes listeners added before it.
   // Adding the same listener again does nothing while it is still attached, so keep re-adding it.
   window.addEventListener('message', onMessage);
-  setInterval(() => window.addEventListener('message', onMessage), 500);
+  setInterval(() => { window.addEventListener('message', onMessage); checkApp(); }, 500);
   function handle(d) {
     if (d.psm === 'app-hello') { announce(); sendDone(); sendLookups(); sendVaccinators(); }
     // A patient search: goes ahead of waiting vaccinations, but never interrupts one already being filled.
@@ -88,6 +100,6 @@
   // Lets the RAVS tab know the clinic app is open, so it keeps RAVS logged in only while it is.
   const seen = () => { if (isApp()) chrome.storage.local.set({ appSeenAt: Date.now() }); };
   seen(); setInterval(seen, 60 * 1000);
-  announce();
+  checkApp();
   setTimeout(() => { announce(); sendDone(); sendLookups(); }, 1500);
 })();
