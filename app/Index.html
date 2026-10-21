@@ -448,6 +448,21 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 .scrim { position: fixed; inset: 0; background: rgba(10, 20, 22, .45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; z-index: 20; overflow-y: auto; }
 .modal { background: var(--surface); border-radius: 16px; border: 1px solid var(--line); width: min(720px, 100%); padding: 24px; display: grid; gap: 14px; }
 .modal h2 { margin: 0; font-size: 19px; }
+.statusline { font-weight: 700; font-size: 14px; padding: 8px 12px; border-radius: 10px; }
+.statusline.on { background: var(--ok-soft); color: var(--ok); }
+.statusline.off { background: var(--warn-soft); color: var(--warn); }
+.menuopts { display: grid; gap: 10px; }
+.menuopt { display: grid; gap: 3px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font: inherit; color: var(--ink); }
+.menuopt:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.menuopt b { font-size: 16px; }
+.menuopt span { font-size: 13.5px; color: var(--muted); }
+.menuopt.danger b { color: var(--bad); }
+.menuopt.danger:hover { border-color: var(--bad); background: var(--bad-soft); }
+.linkbtn { border: 0; background: none; padding: 4px 0; color: var(--accent); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; justify-self: start; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.editbanner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: var(--info-soft); color: var(--info); font-size: 14px; }
+.editbanner b { color: var(--ink); }
+.editbanner .sp { flex: 1; }
 .modal p { margin: 0; }
 .modal textarea { width: 100%; min-height: 180px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-family: var(--font-mono); font-size: 12px; }
 #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 10px; font-weight: 700; z-index: 30; max-width: calc(100% - 32px); }
@@ -513,6 +528,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
         <div class="hrow"><h2><span class="num">2</span>Select vaccine</h2></div>
         <p class="lede" id="box2Locked">Find and confirm the patient first.</p>
         <div id="box2Body" hidden>
+          <div id="editBanner"></div>
           <div id="vaxArea"></div>
           <div class="eligs" id="eligBox"></div>
 
@@ -535,8 +551,6 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
   </form>
     <div class="panel today">
       <div class="hrow"><h2>Previous entries <span class="hsub">today, for checking</span></h2><span class="sp"></span><span class="summary" id="deskSummary" style="margin:0"></span></div>
-      <div id="waitWrap"><h3 class="sect">Not vaccinated yet <span id="waitCount" style="font-weight:400"></span></h3>
-      <div class="list waitlist" id="waitList"></div></div>
       <h3 class="sect">Vaccinated today <span id="givenCount" style="font-weight:400"></span></h3>
       <div class="list givenbox" id="givenList"></div>
     </div>
