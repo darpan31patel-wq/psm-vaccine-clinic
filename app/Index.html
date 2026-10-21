@@ -232,16 +232,27 @@ details.extra .fields { margin-top: 14px; }
 
 /* find patient / record boxes */
 .box h2 { display: flex; align-items: center; gap: 10px; }
-.panel.box, .panel.today { border-top: 3px solid var(--accent); }
-#box2.panel.box { border-top-color: var(--flu); }
+/* every box gets its own light colour wash (set --tint per box) */
+.panel { --tint: var(--accent); border-top: 3px solid var(--tint); border-color: color-mix(in srgb, var(--tint) 22%, var(--line)); border-top-color: var(--tint); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 24%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 9%, var(--surface)) 40%, color-mix(in srgb, var(--tint) 3%, var(--surface)) 100%); box-shadow: 0 1px 2px rgba(20, 35, 42, .04), 0 6px 18px color-mix(in srgb, var(--tint) 12%, transparent); }
+#box2 { --tint: var(--flu); }
 #box2 .num { background: var(--flu); }
-.panel.today { border-top-color: var(--ok); }
-.panel.box, .panel.today { background: linear-gradient(to bottom, color-mix(in srgb, var(--accent-soft) 45%, var(--surface)), var(--surface) 90px); }
-#box2.panel.box { background: linear-gradient(to bottom, color-mix(in srgb, var(--flu-soft) 55%, var(--surface)), var(--surface) 90px); }
-.panel.today { background: linear-gradient(to bottom, color-mix(in srgb, var(--ok-soft) 55%, var(--surface)), var(--surface) 90px); }
-.panel.box.locked, #box2.locked { border-top-color: var(--line); }
-#box2.locked .num { background: var(--line); color: var(--muted); }
-.panel.box.done { border-top-color: var(--ok); }
+.panel.today { --tint: var(--ok); }
+#tab-bookings .panel { --tint: var(--info); }
+#tab-todo .panel { --tint: var(--warn); }
+#tab-private .panel { --tint: var(--priv); }
+#tab-records .panel { --tint: var(--covid); }
+#tab-records .panel + .panel { --tint: var(--flu); }
+#tab-settings .panel { --tint: var(--accent); }
+#tab-todo .donelist { --tint: var(--ok); }
+.tab .card, .tab .rv { --tint: var(--warn); border-color: color-mix(in srgb, var(--tint) 22%, var(--line)); border-left: 4px solid var(--tint); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 14%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 4%, var(--surface)) 50%, var(--surface) 100%); }
+#defaultsBar.defaults { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), color-mix(in srgb, var(--flu) 8%, var(--surface)) 60%, color-mix(in srgb, var(--covid) 10%, var(--surface))); border-color: color-mix(in srgb, var(--accent) 20%, var(--line)); }
+/* livelier page: soft colour washes behind the boxes, tinted top bar and summary strip */
+body { background: radial-gradient(1100px 600px at 0% 0%, color-mix(in srgb, var(--accent) 12%, var(--bg)), transparent 70%), radial-gradient(900px 600px at 100% 10%, color-mix(in srgb, var(--covid) 10%, var(--bg)), transparent 70%), radial-gradient(900px 700px at 60% 100%, color-mix(in srgb, var(--flu) 9%, var(--bg)), transparent 70%), var(--bg); background-attachment: fixed; }
+header.top { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 35%, var(--surface) 65%, color-mix(in srgb, var(--covid) 8%, var(--surface))); }
+.panel.box.locked, #box2.locked { opacity: .85; }
+#box2.locked .num { color: #fff; }
+
+.panel.box.done { --tint: var(--ok); }
 .panel h3.sect { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
 .num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; display: inline-grid; place-items: center; flex: none; }
 .box.locked .num { background: var(--line); color: var(--muted); }
@@ -258,7 +269,7 @@ details.extra .fields { margin-top: 14px; }
 .offline .off-only { display: flex; }
 .offline #findFields .lede { display: none; }
 .offchip[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); color: #fff; }
-.panel.box.offline { border-top-color: var(--warn); }
+.panel.box.offline { --tint: var(--warn); }
 .foundhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .histbox { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .histbox.hist { white-space: pre-line; font-size: 14px; padding: 10px 14px; }
