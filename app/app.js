@@ -830,11 +830,18 @@ function waitRow(v) {
     <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.note ? `<span class="f f-note">${esc(r.note)}</span>` : ''}</div></div>
     <div class="right"><button type="button" class="btn sm go" data-give="${esc(r.visitId)}">Vaccinated</button><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button><button type="button" class="btn sm ghost" data-notgiven="${esc(r.visitId)}">Not given</button></div></div>`;
 }
+// One short label per entry: is it on RAVS yet? Private entries never go to RAVS.
+function ravsPill(v) {
+  const nhs = v.filter(d => !isPriv(d));
+  if (!nhs.length) return '<span class="pill p-private">Private</span>';
+  if (nhs.some(d => d.status === 'notgiven')) return statusPill('notgiven');
+  return nhs.every(d => d.status === 'entered') ? '<span class="pill p-entered">✓ On RAVS</span>' : '<span class="pill p-notravs">Not on RAVS yet</span>';
+}
 function givenRow(v) {
   const r = v[0];
   return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub vx">${v.map(d => vaxTag(d, true)).join('')}</div>
     <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div></div>
-    <div class="right"><span class="pills">${[...new Set(v.filter(d => !isPriv(d)).map(d => d.status))].map(st => st === 'given' ? '' : statusPill(st)).join('')}</span><button type="button" class="btn sm" data-entrymenu="${esc(r.visitId)}">Edit</button></div></div>`;
+    <div class="right"><span class="pills">${ravsPill(v)}</span><button type="button" class="btn sm" data-entrymenu="${esc(r.visitId)}">Edit</button></div></div>`;
 }
 function doseEditor(d) {
   const prods = (S.products || []).filter(p => p.vaccine === d.vaccine);
