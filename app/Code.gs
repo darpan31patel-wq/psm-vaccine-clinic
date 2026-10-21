@@ -192,3 +192,64 @@ function apiSaveSettings(s) {
 function apiExport(from, to) {
   return readAll_().filter(r => r.date >= from && r.date <= to && r.status !== 'checkedin');
 }
+
+/* ---------- Recall list: past patients, one row per person ---------- */
+const RECALL = 'Recall';
+const RCOLS = ['key', 'nhs', 'surname', 'given', 'dob', 'gender', 'postcode', 'address', 'phone', 'history', 'reason', 'source',
+  'contact', 'contactAt', 'contactBy', 'contactNote', 'updatedAt'];
+
+function recallSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  let sh = ss.getSheetByName(RECALL);
+  if (!sh) {
+    sh = ss.insertSheet(RECALL);
+    sh.getRange(1, 1, 1, RCOLS.length).setValues([RCOLS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    sh.getRange('A:Q').setNumberFormat('@');
+  }
+  return sh;
+}
+function recallAll_() {
+  const sh = recallSheet_();
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  return sh.getRange(2, 1, n, RCOLS.length).getDisplayValues().map(row => {
+    const o = {}; RCOLS.forEach((c, i) => o[c] = row[i]); return o;
+  });
+}
+
+function apiRecallGet() { return recallAll_(); }
+
+/** Adds or replaces people by key. The screen has already merged them with what was there. */
+function apiRecallSave(people) {
+  return lock_(() => {
+    const sh = recallSheet_();
+    const all = recallAll_();
+    const at = {}; all.forEach((r, i) => at[r.key] = i);
+    const now = new Date().toISOString();
+    people.forEach(p => {
+      p.updatedAt = now;
+      if (p.key in at) all[at[p.key]] = Object.assign(all[at[p.key]], p);
+      else { at[p.key] = all.length; all.push(p); }
+    });
+    if (all.length) sh.getRange(2, 1, all.length, RCOLS.length).setValues(all.map(o => RCOLS.map(c => o[c] == null ? '' : String(o[c]))));
+    return { ok: true, total: all.length };
+  });
+}
+
+/** Records a contact outcome (called, texted, declined, elsewhere, or '' to clear) for one person. */
+function apiRecallContact(key, patch) {
+  return lock_(() => {
+    const sh = recallSheet_();
+    const n = sh.getLastRow() - 1;
+    if (n < 1) return { ok: false };
+    const i = sh.getRange(2, 1, n, 1).getValues().map(r => String(r[0])).indexOf(key);
+    if (i < 0) return { ok: false };
+    const range = sh.getRange(i + 2, 1, 1, RCOLS.length);
+    const row = range.getDisplayValues()[0];
+    ['contact', 'contactAt', 'contactBy', 'contactNote'].forEach(k => { if (k in patch) row[RCOLS.indexOf(k)] = String(patch[k] == null ? '' : patch[k]); });
+    row[RCOLS.indexOf('updatedAt')] = new Date().toISOString();
+    range.setValues([row]);
+    return { ok: true };
+  });
+}

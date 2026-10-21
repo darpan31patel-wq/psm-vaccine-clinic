@@ -248,7 +248,26 @@ const Demo = (() => {
     async search(q, seasonStart) { return searchRows(db.rows, q, seasonStart); },
     async saveSettings(s) { db.settings = s; save(); return { ok: true }; },
     async exportRows(from, to) { return db.rows.filter(r => r.date >= from && r.date <= to && r.status !== 'checkedin'); },
+    async recallGet() { if (!db.recall) { db.recall = demoRecall(db.rows); store.set(KEY, db); } return db.recall.map(p => Object.assign({}, p)); },
+    async recallSave(people) { const at = new Map((db.recall || []).map((p, i) => [p.key, i])); people.forEach(p => at.has(p.key) ? Object.assign(db.recall[at.get(p.key)], p) : db.recall.push(p)); save(); return { ok: true }; },
+    async recallContact(key, patch) { const p = (db.recall || []).find(x => x.key === key); if (p) Object.assign(p, patch); save(); return { ok: true }; },
   };
+  // Made-up past patients: some who came back this season, the rest not yet.
+  function demoRecall(rows) {
+    const first = ['Amy', 'Bob', 'Cara', 'Dev', 'Ella', 'Finn', 'Gail', 'Hugo', 'Iris', 'Joe', 'Kim', 'Leo', 'Maya', 'Noel', 'Opal', 'Pete', 'Rosa', 'Sam', 'Tess', 'Vic'];
+    const last = ['Testwell', 'Mockley', 'Samplin', 'Dummett', 'Fakeham', 'Notley', 'Pretendo', 'Madeson', 'Examply', 'Trialby'];
+    const out = [];
+    rows.filter(r => r.surname !== 'HISTORIC' && r.nhs && !isPriv(r)).forEach(r => { if (!out.some(p => p.key === r.nhs)) out.push({ key: r.nhs, nhs: r.nhs, surname: r.surname, given: r.given, dob: r.dob, gender: '', postcode: r.postcode, address: '', phone: '', history: '2025-26 Flu, COVID; 2024-25 Flu', reason: '', source: 'Old sheets', contact: '', contactAt: '', contactBy: '', contactNote: '' }); });
+    for (let i = 0; i < 46; i++) {
+      const y = i % 3 === 0 ? 1980 + (i % 15) : 1932 + (i * 7) % 28, nhs = nhsWithCheck('99950' + String(2000 + i * 53).padStart(4, '0'));
+      const hist = i % 5 === 0 ? '2023-24 Flu' : i % 4 === 0 ? '2025-26 Flu; 2024-25 Flu, COVID; 2023-24 Flu' : i % 2 ? '2025-26 Flu, COVID' : '2025-26 Flu';
+      const contact = i === 3 ? 'called' : i === 8 ? 'texted' : i === 13 ? 'declined' : i === 21 ? 'elsewhere' : '';
+      out.push({ key: nhs, nhs, surname: last[i % 10].toUpperCase(), given: first[(i * 3) % 20], dob: `${y}-${pad(1 + i % 12)}-${pad(1 + (i * 5) % 28)}`, gender: '', postcode: `KT${5 + i % 2} ${i % 9}${'ABDEFGHJ'[i % 8]}${'LNPQRSTU'[i % 8]}`,
+        address: '', phone: i % 3 ? `07700 900${String(100 + i).slice(-3)}` : '', history: hist, reason: y > 1960 ? ['Clinical Risk Group', 'Carer', 'Pregnant'][i % 3] : '', source: 'Old sheets',
+        contact, contactAt: contact ? `${todayIso()} 10:${pad(10 + i)}` : '', contactBy: contact ? 'Front desk 1' : '', contactNote: '' });
+    }
+    return out;
+  }
   return api;
 })();
 
@@ -284,6 +303,9 @@ const API = hasGas ? {
   search: (q, s) => gas('apiSearch', q, s),
   saveSettings: s => gas('apiSaveSettings', s),
   exportRows: (f, t) => gas('apiExport', f, t),
+  recallGet: () => gas('apiRecallGet'),
+  recallSave: p => gas('apiRecallSave', p),
+  recallContact: (k, p) => gas('apiRecallContact', k, p),
 } : Demo;
 
 /* ===================== state ===================== */
@@ -366,7 +388,7 @@ function renderAll(settingsChanged) {
   // Each part draws on its own, so a problem in one screen can't leave the operator box or the clinic form blank.
   const parts = [renderMe, renderFind, () => { $('#todayLabel').textContent = longDate(todayIso()); }];
   if (settingsChanged || !renderAll._f) parts.push(renderDeskForm, renderSettings);
-  parts.push(renderDeskLists, renderVax, renderTodo, renderRecords, () => ($('#tab-private').classList.contains('on') ? loadPrivate() : renderPrivate()), updateGive);
+  parts.push(renderDeskLists, renderVax, renderTodo, renderRecords, () => ($('#tab-private').classList.contains('on') ? loadPrivate() : renderPrivate()), () => { if (RECALL) renderRecall(); }, updateGive);
   if (!renderAll._f) renderAll._f = true; else parts.splice(1, 1);
   let failed = null;
   parts.forEach(fn => { try { fn(); } catch (e) { console.error(e); failed = failed || e; } });
@@ -945,7 +967,7 @@ function renderRecords() {
   $('#dayTable').innerHTML = `<thead><tr><th>Date</th>${vaxCols.map(v => `<th class="n">${esc(VACCINES[v].short)}</th>`).join('')}<th class="n">NHS given</th><th class="n">On RAVS</th><th class="n">Missing</th><th style="width:24%"></th></tr></thead><tbody>` +
     (DAYS.length ? DAYS.map(x => { const y = split(x), miss = y.nhs - y.onRavs; return `<tr><td class="mono">${esc(ukDate(x.date))}</td>${vaxCols.map(v => `<td class="n">${x.byVax[v] || ''}</td>`).join('')}<td class="n">${y.nhs}</td><td class="n">${y.onRavs}</td><td class="n" ${miss ? 'style="color:var(--warn);font-weight:700"' : ''}>${miss || ''}</td><td><div class="bar" style="width:${Math.round(y.nhs / max * 100)}%"></div></td></tr>`; }).join('') : '<tr><td colspan="9" class="empty">Nothing yet.</td></tr>') + '</tbody>';
 }
-let searchTimer;
+let searchTimer, recallSearchTimer;
 function onSearch() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(async () => {
@@ -1195,6 +1217,284 @@ function openNotGiven(visitId) {
   $('#ngGo').onclick = async () => { const ids = ROWS.filter(r => r.visitId === visitId && r.status === 'waiting').map(r => r.id); await API.update(ids, { status: 'notgiven', note: [$('#ngWhy').value, $('#ngNote').value].filter(Boolean).join(': ') }); closeModal(); toast('Marked as not given'); await refresh(true); };
 }
 
+/* ---------- recall list ---------- */
+// Everyone vaccinated with us in past seasons (read from the old season Excel files), checked against this season's
+// records so staff can contact anyone who hasn't come back. Kept in the Recall sheet only, never in this browser.
+let RECALL = null, RECALL_ERR = '', THIS_SEASON = [];
+let recallView = { status: 'todo', who: 'all', seen: 'last', q: '', show: 200 };
+const CONTACT_LABEL = { called: 'Called', texted: 'Texted', declined: 'Not interested', elsewhere: 'Had it elsewhere' };
+const NOT_COMING = ['declined', 'elsewhere'];
+function seasonOf(iso) { const y = +iso.slice(0, 4), m = +iso.slice(5, 7), s = m >= 8 ? y : y - 1; return `${s}-${String(s + 1).slice(2)}`; }
+const seasonNow = () => seasonOf(S.seasonStart || todayIso());
+const seasonBefore = s => `${+s.slice(0, 4) - 1}-${s.slice(2, 4)}`;
+const nameKey = p => `${String(p.surname || '').toUpperCase().replace(/[^A-Z]/g, '')}|${p.dob}`;
+// "2025-26 Flu, COVID; 2024-25 Flu" <-> { '2025-26': Set(['Flu', 'COVID-19']), ... }
+function historyMap(s) { const m = {}; String(s || '').split(';').map(x => x.trim()).filter(Boolean).forEach(x => { const [season, ...v] = x.split(' '); m[season] = new Set(v.join(' ').split(',').map(t => t.trim()).filter(Boolean).map(t => t === 'COVID' ? 'COVID-19' : t)); }); return m; }
+function historyText(m) { return Object.keys(m).sort().reverse().map(s => `${s} ${[...m[s]].map(v => v === 'COVID-19' ? 'COVID' : v).join(', ')}`).join('; '); }
+
+async function loadRecall() {
+  try {
+    const [people, rows] = await Promise.all([API.recallGet(), API.exportRows(S.seasonStart || todayIso(), '9999-12-31')]);
+    RECALL = people; THIS_SEASON = rows.filter(r => !['deleted', 'notgiven'].includes(r.status)); RECALL_ERR = '';
+  } catch (e) {
+    console.warn(e); RECALL = RECALL || [];
+    RECALL_ERR = /not found|apiRecall/i.test(String(e && (e.message || e))) ? 'update' : String(e && (e.message || e));
+  }
+  renderRecall();
+}
+// One person as the list shows them: what they've had before, what they're due by age, and whether they're back.
+function recallState(p, back) {
+  const hist = historyMap(p.history), now = seasonNow();
+  const past = Object.keys(hist).filter(s => s < now).sort().reverse();
+  const age = p.dob ? ageOn(p.dob, todayIso()) : null;
+  const flu = !!p.dob && ageOn(p.dob, S.fluDate) >= S.fluAge, covid = !!p.dob && ageOn(p.dob, S.covDate) >= S.covAge;
+  const k = back.byNhs.get(p.nhs) || back.byName.get(nameKey(p)) || (hist[now] ? 'back' : '');
+  const status = k === 'back' ? 'back' : k === 'booked' ? 'booked' : NOT_COMING.includes(p.contact) ? 'gone' : p.contact ? 'contacted' : 'todo';
+  return { p, hist, past, last: past[0] || '', age, flu, covid, status };
+}
+function recallList() {
+  const back = { byNhs: new Map(), byName: new Map() };
+  THIS_SEASON.concat(ROWS).forEach(r => {
+    const k = ['given', 'entered'].includes(r.status) ? 'back' : ['booked', 'checkedin'].includes(r.status) ? 'booked' : '';
+    if (!k) return;
+    [[back.byNhs, cleanNhs(r.nhs)], [back.byName, nameKey(r)]].forEach(([m, key]) => { if (key && key.length > 2 && m.get(key) !== 'back') m.set(key, k); });
+  });
+  return (RECALL || []).map(p => recallState(p, back)).filter(x => x.past.length && (x.age == null || x.age >= 18));
+}
+function renderRecall() {
+  if (!$('#recallList')) return;
+  if (RECALL === null) { $('#recallList').innerHTML = '<div class="panel empty">Loading…</div>'; return; }
+  if (RECALL_ERR === 'update') {
+    $('#recallTiles').innerHTML = ''; $('#recallList').innerHTML = `<div class="panel"><h2>One-time update needed</h2><ol class="steps">
+      <li>Open the app data sheet (Vaccine Clinic 2026-27), click <b>Extensions → Apps Script</b>.</li>
+      <li>Open <b>Code.gs</b>, select everything (Cmd+A), delete it, and paste in the new Code.gs from GitHub: <a href="https://github.com/darpan31patel-wq/psm-vaccine-clinic/blob/main/app/Code.gs" target="_blank" rel="noopener">app/Code.gs</a> (press the copy icon at the top right of the code).</li>
+      <li>Click <b>Save</b> (the disk icon).</li>
+      <li>Click <b>Deploy → Manage deployments</b>, the pencil, set <b>Version: New version</b>, then <b>Deploy</b>.</li>
+      <li>Reload this page (Cmd+R).</li></ol></div>`;
+    return;
+  }
+  const list = recallList(), last = seasonBefore(seasonNow());
+  const inSeen = x => recallView.seen === 'any' || x.last === last;
+  const inWho = x => recallView.who === 'all' || (recallView.who === 'flu' ? x.flu : recallView.who === 'covid' ? x.covid : !x.flu);
+  const seen = list.filter(inSeen);
+  const n = st => seen.filter(x => x.status === st && inWho(x)).length;
+  setCount('#cRecall', list.filter(x => x.last === last && x.status === 'todo' && (x.flu || x.covid)).length);
+  const tile = (k, v, cls) => `<div class="tile ${cls || ''}"><div class="k">${k}</div><div class="n">${v.toLocaleString('en-GB')}</div></div>`;
+  const lastAll = list.filter(x => x.last === last);
+  $('#recallTiles').innerHTML = tile(`Came in ${last}`, lastAll.length) + tile('Back this season', lastAll.filter(x => x.status === 'back').length, 'ok') +
+    tile('Not back yet', lastAll.filter(x => ['todo', 'contacted'].includes(x.status)).length, 'warn') +
+    tile(`Flu ${S.fluAge}+ not back`, lastAll.filter(x => x.flu && ['todo', 'contacted'].includes(x.status)).length, 'flu') +
+    tile(`COVID ${S.covAge}+ not back`, lastAll.filter(x => x.covid && ['todo', 'contacted'].includes(x.status)).length, 'covid') +
+    tile('Contacted', lastAll.filter(x => x.status === 'contacted').length);
+  const chip = (attr, val, cur, label, cls = '') => `<button type="button" class="chip small ${cls}" data-${attr}="${val}" aria-pressed="${cur === val}">${label}</button>`;
+  $('#recallFilters').innerHTML = `<div class="vaxpick">${[['todo', 'To contact'], ['contacted', 'Contacted'], ['booked', 'Booked'], ['back', 'Back this season'], ['gone', 'Not coming']].map(([v, l]) => chip('rstatus', v, recallView.status, `${l} <span class="pr">${n(v).toLocaleString('en-GB')}</span>`)).join('')}</div>
+    <div class="vaxpick">${chip('rwho', 'all', recallView.who, 'Everyone')}${chip('rwho', 'flu', recallView.who, `Flu ${S.fluAge}+`, 'flu')}${chip('rwho', 'covid', recallView.who, `COVID ${S.covAge}+`, 'covid')}${chip('rwho', 'young', recallView.who, `Under ${S.fluAge}`)}
+    <span class="vsep"></span>${chip('rseen', 'last', recallView.seen, `Came in ${last}`)}${chip('rseen', 'any', recallView.seen, 'Any year')}</div>`;
+  const q = recallView.q.trim().toLowerCase(), qn = cleanNhs(q), qd = parseDob(q);
+  const rows = seen.filter(x => x.status === recallView.status && inWho(x) && (!q || (qn.length >= 6 && x.p.nhs.includes(qn)) || (qd && x.p.dob === qd) || `${x.p.given} ${x.p.surname} ${x.p.surname} ${x.p.postcode}`.toLowerCase().includes(q)))
+    .sort((a, b) => b.last.localeCompare(a.last) || (b.covid - a.covid) || (b.flu - a.flu) || a.p.surname.localeCompare(b.p.surname) || a.p.given.localeCompare(b.p.given));
+  recallList._shown = rows;
+  if (!RECALL.length) { $('#recallList').innerHTML = `<div class="panel empty">No past patients yet. Press <b>Add old season files</b> and choose the Excel files of your old flu and COVID sheets.</div>`; return; }
+  const due = x => [x.flu ? `<span class="vtag flu">Flu ${S.fluAge}+</span>` : '', x.covid ? `<span class="vtag covid">COVID ${S.covAge}+</span>` : '', !x.flu ? `<span class="pill p-waiting" title="Under ${S.fluAge}: needs a reason this season">Needs a reason${x.p.reason ? `: ${esc(x.p.reason)}` : ''}</span>` : ''].join('');
+  const had = x => x.past.slice(0, 3).map(s => `<span class="hseason"><b>${esc(s)}</b> ${[...x.hist[s]].map(v => esc(VACCINES[v]?.short || v)).join(' + ')}</span>`).join('') + (x.past.length > 3 ? `<span class="small muted">+${x.past.length - 3} more</span>` : '');
+  const act = x => x.status === 'back' ? '<span class="pill p-entered">✓ Back</span>' : x.status === 'booked' ? '<span class="pill p-booked">Booked</span>' :
+    (x.p.contact ? `<span class="pill ${NOT_COMING.includes(x.p.contact) ? 'p-neutral' : 'p-given'}" title="${esc(x.p.contactBy)}">${esc(CONTACT_LABEL[x.p.contact] || x.p.contact)} ${esc(ukDate((x.p.contactAt || '').slice(0, 10)).slice(0, 5))}</span><button type="button" class="btn ghost sm" data-rcontact="" data-key="${esc(x.p.key)}">Undo</button>` : '') +
+      (x.p.contact && NOT_COMING.includes(x.p.contact) ? '' : `<button type="button" class="btn sm" data-rcontact="called" data-key="${esc(x.p.key)}">Called</button><button type="button" class="btn sm" data-rcontact="texted" data-key="${esc(x.p.key)}">Texted</button><button type="button" class="btn sm" data-rmore="${esc(x.p.key)}">More</button>`);
+  $('#recallList').innerHTML = `<div class="panel list rlist" style="padding-block:6px">${rows.length ? rows.slice(0, recallView.show).map(x => `<div class="row">
+      <div class="time" title="Age today">${x.age ?? '?'}</div>
+      <div class="who"><div class="nm">${esc(fullName(x.p))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(x.p.dob))}</span>${x.p.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(x.p.nhs))}</span>` : ''}${x.p.postcode ? `<span class="mono f f-pc">${esc(x.p.postcode)}</span>` : ''}${x.p.phone ? `<span class="mono f f-phone">${esc(x.p.phone)}</span>` : ''}<span class="f f-had"><span class="hs">${had(x)}</span></span></div></div>
+      <div class="right">${due(x)}${act(x)}<button type="button" class="btn sm primary" data-rfind="${esc(x.p.key)}" title="Fill in Find patient on Register patient">Find patient</button></div></div>`).join('') +
+    (rows.length > recallView.show ? `<div class="row" style="grid-template-columns:1fr"><button type="button" class="btn" data-rshowmore>Show more (${(rows.length - recallView.show).toLocaleString('en-GB')} left)</button></div>` : '')
+    : '<div class="empty">Nobody here.</div>'}</div>`;
+}
+async function setContact(key, contact) {
+  const p = (RECALL || []).find(x => x.key === key); if (!p) return;
+  const patch = { contact, contactAt: contact ? `${todayIso()} ${nowTime()}` : '', contactBy: contact ? me : '' };
+  Object.assign(p, patch); closeModal(); renderRecall();
+  try { await API.recallContact(key, patch); } catch (e) { showError(e); }
+}
+function recallMore(key) {
+  const p = (RECALL || []).find(x => x.key === key); if (!p) return;
+  openModal(`<h2>${esc(fullName(p))}</h2><p class="small muted" style="margin-top:0">${esc(ukDate(p.dob))}${p.address ? ' · ' + esc(p.address) : ''}<br>Had with us: ${esc(p.history)}${p.reason ? `<br>Reason given before: ${esc(p.reason)}` : ''}</p>
+    <div class="actions" style="flex-wrap:wrap"><button type="button" class="btn" data-rcontact="declined" data-key="${esc(key)}">Not interested</button><button type="button" class="btn" data-rcontact="elsewhere" data-key="${esc(key)}">Had it elsewhere</button><button type="button" class="btn ghost" data-close>Close</button></div>`);
+}
+function recallFind(key) {
+  const p = (RECALL || []).find(x => x.key === key); if (!p) return;
+  clearForm();
+  $('#fNhs').value = fmtNhs(p.nhs); $('#fDob').value = ukDate(p.dob); $('#fGiven').value = p.given; $('#fSurname').value = p.surname; $('#fPostcode').value = p.postcode || ''; $('#fPhone').value = p.phone || '';
+  showTab('desk'); renderDeskForm(); onDobInput(); onNhsInput(); checkDuplicates();
+  if (canSearch() && (p.nhs || p.dob)) startFind(); else renderFind();
+}
+async function exportRecall() {
+  const rows = recallList._shown || [];
+  if (!rows.length) return toast('Nothing in this list to download.');
+  try {
+    const ExcelJS = await loadExcelJs(), wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Recall');
+    const cols = [['Surname', x => x.p.surname, 16], ['First name', x => x.p.given, 14], ['Date of birth', x => ukDate(x.p.dob), 12], ['Age', x => x.age ?? '', 6], ['NHS number', x => fmtNhs(x.p.nhs), 14],
+      ['Phone', x => x.p.phone, 14], ['Postcode', x => x.p.postcode, 10], ['Address', x => x.p.address, 36], ['Due by age', x => [x.flu && 'Flu', x.covid && 'COVID'].filter(Boolean).join(', ') || 'Needs a reason', 14],
+      ['Reason before', x => x.p.reason, 18], ['Had with us', x => x.p.history, 34], ['Contact', x => CONTACT_LABEL[x.p.contact] || '', 14], ['Contacted on', x => ukDate((x.p.contactAt || '').slice(0, 10)), 12], ['By', x => x.p.contactBy, 12]];
+    const h = ws.addRow(cols.map(c => c[0])); h.font = { bold: true, color: { argb: 'FFFFFFFF' } }; h.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_FILL.head } };
+    cols.forEach((c, i) => { ws.getColumn(i + 1).width = c[2]; });
+    rows.forEach(x => ws.addRow(cols.map(c => c[1](x) ?? '')));
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PSM recall list ${ukDate(todayIso()).replace(/\//g, '-')}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { console.warn(e); toast("Couldn't make the Excel file. Check the internet connection and try again."); }
+}
+
+/* old season files: the daily card sheets (Family Name:, Given Name(s):, ...) or any table with a header row */
+function loadSheetJs() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  const urls = ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'];
+  return urls.reduce((p, u) => p.catch(() => new Promise((res, rej) => { const el = document.createElement('script'); el.src = u; el.onload = () => window.XLSX ? res(window.XLSX) : rej(); el.onerror = rej; document.head.appendChild(el); })), Promise.reject());
+}
+const RC_SKIP_TAB = /TEMPLATE|AUDIT|TO CHECK|^LIST$|LFT|PPV|NASAL|^x+$|yyyy/i;
+function cellIso(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return isNaN(v) ? '' : isoDate(new Date(v.getTime() + 12 * 3600e3));
+  if (typeof v === 'number') { if (v < 600 || v > 80000) return ''; const d = new Date(Math.round((v - 25569) * 86400e3)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
+  const s = String(v).trim(); return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : parseDob(s) || '';
+}
+// "Family Name:", including ones with the first letters cut off ("amily Name:").
+const isFamilyLabel = l => /name:\s*$/.test(l) && !/given|en name|\(s\)|first|full/.test(l);
+const cellText = v => v == null ? '' : v instanceof Date ? '' : String(v).replace(/\s+/g, ' ').trim();
+// The clinic date of a daily tab: "1010" (month and day, year from the file name), "511" (day and month), "101125", "11022025",
+// or else the first date near the top. Tab names come first because copied tabs often keep an old date.
+function tabDate(name, fileYear, grid) {
+  const s = name.trim().split(' ')[0];
+  let m = s.match(/^(\d{2})(\d{2})(\d{4})$/); if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = s.match(/^(\d{2})(\d{2})(\d{2})$/); if (m) return `20${m[3]}-${m[2]}-${m[1]}`;
+  const mmdd = (mo, d) => fileYear && mo >= 1 && mo <= 12 && d >= 1 && d <= 31 ? `${mo >= 8 ? fileYear : fileYear + 1}-${pad(mo)}-${pad(d)}` : '';
+  m = s.match(/^(\d{2})(\d{2})$/); if (m && mmdd(+m[1], +m[2])) return mmdd(+m[1], +m[2]);
+  m = s.match(/^(\d)(\d{2})$/); if (m && mmdd(+m[2], +m[1])) return mmdd(+m[2], +m[1]);
+  for (let r = 0; r < Math.min(25, grid.length); r++) for (const v of grid[r] || []) if (v instanceof Date) { const d = cellIso(v); if (d >= '2015') return d; }
+  return fileYear ? `${fileYear}-10-01` : '';
+}
+function parseOldWorkbook(XLSX, wb, fileName) {
+  const fileYear = +((fileName.match(/20\d\d/) || [])[0]) || 0;
+  const out = [];
+  wb.SheetNames.forEach(sn => {
+    if (RC_SKIP_TAB.test(sn.trim())) return;
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null, blankrows: true });
+    const date = tabDate(sn, fileYear, grid);
+    const priv = /PRIV/i.test(sn) ? (/COV/i.test(sn) ? 'Private COVID' : 'Private flu') : '';
+    const heads = [];
+    grid.forEach((row, r) => (row || []).forEach((v, c) => { const t = cellText(v).toUpperCase(); if (t === 'FLU' || t === 'COVID' || t === 'COVID-19') heads.push({ r, c, v: t === 'FLU' ? 'Flu' : 'COVID-19' }); }));
+    const val = (r, c) => { for (const dc of [2, 1, 3]) { const v = (grid[r] || [])[c + dc]; if (v != null && typeof v !== 'boolean' && (v instanceof Date || cellText(v) !== '')) return v; } return null; };
+    let cards = 0;
+    grid.forEach((row, r) => (row || []).forEach((v, c) => {
+      const lab = cellText(v).toLowerCase();
+      if (!isFamilyLabel(lab)) return;
+      const p = { surname: cellText(val(r, c)), given: '', dob: '', gender: '', nhs: '', address: '', postcode: '', reason: '', phone: '', date };
+      for (let k = r + 1; k < r + 14 && k < grid.length; k++) {
+        const l = cellText((grid[k] || [])[c]).toLowerCase(); if (!l) continue;
+        if (isFamilyLabel(l)) break;
+        const x = val(k, c);
+        if (/given|\(s\)/.test(l)) p.given = cellText(x);
+        else if (/birth/.test(l)) p.dob = cellIso(x);
+        else if (/gender/.test(l)) p.gender = cellText(x);
+        else if (/^nhs number/.test(l)) p.nhs = cleanNhs(cellText(x));
+        else if (/address/.test(l)) p.address = cellText(x);
+        else if (/postcode/.test(l)) p.postcode = fmtPostcode(cellText(x));
+        else if (/exemption/.test(l)) p.reason = cellText(x);
+        else if (/contact|phone|mobile|tel/.test(l)) p.phone = cellText(x);
+        else if (/date of jab|date of vac/.test(l)) { const d = [1, 2].map(dc => cellIso((grid[k] || [])[c + dc])).find(Boolean); if (d) p.date = d; }
+      }
+      if (!p.surname || (!p.dob && p.nhs.length !== 10)) return;
+      const h = heads.filter(x => x.r <= r && x.c <= c).sort((a, b) => b.c - a.c || b.r - a.r)[0];
+      p.vaccine = priv || (h ? h.v : 'Flu');
+      out.push(p); cards++;
+    }));
+    if (!cards) parseTable(grid, date, fileYear).forEach(p => out.push(p));
+  });
+  return out;
+}
+// Any sheet with a header row (a RAVS export, a list someone typed up): find the columns by their names.
+function parseTable(grid, date, fileYear) {
+  const out = [];
+  const hr = grid.findIndex((row, i) => i < 15 && (row || []).filter(v => /nhs|surname|family|forename|first name|birth|dob/i.test(cellText(v))).length >= 2);
+  if (hr < 0) return out;
+  const H = (grid[hr] || []).map(v => cellText(v).toLowerCase());
+  const col = re => H.findIndex(h => re.test(h));
+  const c = { nhs: col(/nhs/), surname: col(/surname|family|last ?name/), given: col(/forename|given|first ?name/), name: col(/^(patient )?name$|full name/), dob: col(/birth|dob/),
+    postcode: col(/post ?code/), phone: col(/phone|mobile|tel/), address: col(/address/), vaccine: col(/vaccine|product|programme|type/), date: col(/^(vaccination |event )?date(?! of birth)|date given|vaccinated on/), reason: col(/eligib|reason|exemption/) };
+  for (let r = hr + 1; r < grid.length; r++) {
+    const row = grid[r] || [], g = k => c[k] >= 0 ? row[c[k]] : null;
+    let surname = cellText(g('surname')), given = cellText(g('given'));
+    if (!surname && c.name >= 0) { const w = cellText(g('name')).split(/,\s*|\s+/).filter(Boolean); if (/,/.test(cellText(g('name')))) { surname = w.shift() || ''; given = w.join(' '); } else { surname = w.pop() || ''; given = w.join(' '); } }
+    const p = { surname, given, dob: cellIso(g('dob')), nhs: cleanNhs(cellText(g('nhs'))), postcode: fmtPostcode(cellText(g('postcode'))), phone: cellText(g('phone')), address: cellText(g('address')), reason: cellText(g('reason')), gender: '', date: cellIso(g('date')) || date };
+    if (!p.surname || (!p.dob && p.nhs.length !== 10)) continue;
+    const vt = cellText(g('vaccine')).toLowerCase();
+    p.vaccine = /covid/.test(vt) ? 'COVID-19' : 'Flu';
+    if (!p.date && fileYear) p.date = `${fileYear}-10-01`;
+    out.push(p);
+  }
+  return out;
+}
+// Folds the cards into one entry per person, matched by NHS number, or by surname and date of birth.
+function mergeRecall(existing, cards) {
+  const byNhs = new Map(), byName = new Map(), changed = new Set();
+  existing.forEach(p => { if (p.nhs) byNhs.set(p.nhs, p); byName.set(nameKey(p), p); });
+  cards.forEach(c => {
+    if (!c.date) return;
+    let p = (c.nhs.length === 10 && byNhs.get(c.nhs)) || (c.dob && byName.get(nameKey(c)));
+    if (!p) { p = { key: c.nhs.length === 10 ? c.nhs : nameKey(c), nhs: '', surname: '', given: '', dob: '', gender: '', postcode: '', address: '', phone: '', history: '', reason: '', source: 'Old sheets', contact: '', contactAt: '', contactBy: '', contactNote: '' }; existing.push(p); }
+    const newer = !p._latest || c.date >= p._latest;
+    ['nhs', 'surname', 'given', 'dob', 'gender', 'postcode', 'address', 'phone', 'reason'].forEach(k => { const v = k === 'surname' ? c.surname.toUpperCase() : k === 'given' ? titleCase(c.given) : c[k]; if (v && (newer || !p[k])) p[k] = v; });
+    if (newer) p._latest = c.date;
+    const h = historyMap(p.history), s = seasonOf(c.date);
+    (h[s] ||= new Set()).add(c.vaccine);
+    p.history = historyText(h);
+    if (p.nhs) byNhs.set(p.nhs, p); byName.set(nameKey(p), p);
+    changed.add(p);
+  });
+  return [...changed].map(p => { const o = Object.assign({}, p); delete o._latest; return o; });
+}
+function openRecallImport() {
+  openModal(`<h2>Add old season files</h2>
+    <p class="small" style="margin-top:0">In each old Google Sheet, click <b>File → Download → Microsoft Excel (.xlsx)</b>. Then choose the downloaded files here (you can pick several at once). They're read on this computer; only the patients found are saved, to the Recall tab of the app data sheet.</p>
+    <input type="file" id="rcFiles" accept=".xlsx,.xls,.csv" multiple>
+    <div id="rcOut" style="margin-top:12px"></div>
+    <div class="actions"><button type="button" class="btn primary" id="rcSave" disabled>Add to recall list</button><button type="button" class="btn ghost" data-close>Close</button></div>`);
+  let cards = [];
+  $('#rcFiles').onchange = async ev => {
+    const files = [...ev.target.files]; cards = []; $('#rcSave').disabled = true;
+    const out = $('#rcOut'); out.innerHTML = '<p class="small muted">Loading the Excel reader…</p>';
+    let XLSX; try { XLSX = await loadSheetJs(); } catch (e) { out.innerHTML = '<div class="alert bad">The Excel reader did not load. Check the internet connection and try again.</div>'; return; }
+    const lines = [];
+    for (const f of files) {
+      out.innerHTML = lines.join('') + `<p class="small muted">Reading ${esc(f.name)}… (big files take up to a minute)</p>`;
+      await new Promise(r => setTimeout(r, 30));
+      try {
+        const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true, cellFormula: false, cellStyles: false });
+        const got = parseOldWorkbook(XLSX, wb, f.name); cards = cards.concat(got);
+        const seasons = {}; got.forEach(c => { if (c.date) { const s = seasonOf(c.date); seasons[s] = (seasons[s] || 0) + 1; } });
+        lines.push(`<div class="alert ${got.length ? 'ok' : 'warn'}"><b>${esc(f.name)}</b>: ${got.length ? `${got.length.toLocaleString('en-GB')} vaccinations (${Object.keys(seasons).sort().map(s => `${s}: ${seasons[s].toLocaleString('en-GB')}`).join(', ')})` : 'no patients found in this file'}</div>`);
+      } catch (e) { console.warn(e); lines.push(`<div class="alert bad"><b>${esc(f.name)}</b>: couldn't read this file (${esc(e.message || e)})</div>`); }
+    }
+    const people = new Set(cards.map(c => c.nhs.length === 10 ? c.nhs : nameKey(c))).size;
+    out.innerHTML = lines.join('') + (cards.length ? `<p class="small" style="margin-bottom:0">About ${people.toLocaleString('en-GB')} different patients.</p>` : '');
+    $('#rcSave').disabled = !cards.length;
+  };
+  $('#rcSave').onclick = async () => {
+    $('#rcSave').disabled = true; const out = $('#rcOut');
+    try {
+      const existing = (await API.recallGet()).map(p => Object.assign({}, p));
+      const changed = mergeRecall(existing, cards);
+      for (let i = 0; i < changed.length; i += 1000) {
+        out.insertAdjacentHTML('beforeend', `<p class="small muted">Saving ${Math.min(i + 1000, changed.length).toLocaleString('en-GB')} of ${changed.length.toLocaleString('en-GB')}…</p>`);
+        await API.recallSave(changed.slice(i, i + 1000));
+      }
+      closeModal(); toast(`${changed.length.toLocaleString('en-GB')} patients added or updated`); loadRecall();
+    } catch (e) {
+      console.warn(e);
+      out.insertAdjacentHTML('beforeend', /not found|apiRecall/i.test(String(e && (e.message || e))) ? '<div class="alert bad">The app needs a one-time update first. Close this and follow the steps on the Recall tab.</div>' : `<div class="alert bad">Couldn't save (${esc(e.message || e)}). Try again.</div>`);
+      $('#rcSave').disabled = false;
+      if (/not found|apiRecall/i.test(String(e && (e.message || e)))) { RECALL_ERR = 'update'; renderRecall(); }
+    }
+  };
+}
+
 /* ===================== events ===================== */
 let curTab = 'desk';
 function showTab(name) {
@@ -1204,6 +1504,7 @@ function showTab(name) {
   $$('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + name));
   store.set('psm.tab', name);
   if (name === 'private') loadPrivate();
+  if (name === 'recall') loadRecall();
 }
 document.addEventListener('click', async ev => {
   if (ev.target.closest('#ravsCheck')) return checkRavs();
@@ -1274,6 +1575,15 @@ document.addEventListener('click', async ev => {
   if (b.id === 'clearForm') return clearForm();
   if (b.id === 'offlineBtn') { offline = !offline; store.set('psm.offline', offline); form.findMsg = ''; if (!['find', 'error'].includes(form.step)) clearForm(); return renderFind(); }
   if (b.id === 'exportBtn') return exportExcel();
+  if (b.id === 'recallAdd') return openRecallImport();
+  if (b.id === 'recallExport') return exportRecall();
+  if (d.rstatus) { recallView.status = d.rstatus; recallView.show = 200; return renderRecall(); }
+  if (d.rwho) { recallView.who = d.rwho; recallView.show = 200; return renderRecall(); }
+  if (d.rseen) { recallView.seen = d.rseen; recallView.show = 200; return renderRecall(); }
+  if ('rshowmore' in d) { recallView.show += 200; return renderRecall(); }
+  if (d.rcontact !== undefined && d.key) return setContact(d.key, d.rcontact);
+  if (d.rmore) return recallMore(d.rmore);
+  if (d.rfind) return recallFind(d.rfind);
   if (b.id === 'addProd') { S.products = readProducts().concat([{ vaccine: 'Flu', product: '', batch: '', expiry: '', active: true }]); renderProdTable(); }
 });
 document.addEventListener('change', ev => {
@@ -1289,6 +1599,7 @@ document.addEventListener('input', ev => {
   if (t.id === 'fDob') { onDobInput(); checkDuplicates(); }
   if (t.id === 'fSurname') checkDuplicates();
   if (t.id === 'searchBox') onSearch();
+  if (t.id === 'recallSearch') { recallView.q = t.value; recallView.show = 200; clearTimeout(recallSearchTimer); recallSearchTimer = setTimeout(renderRecall, 250); }
   if (t.id === 'fPhone' || t.id === 'fNote') renderExtraSum();
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeModal(); });
@@ -1314,7 +1625,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 1';
+const BUILD = '21 Oct 2026, 2';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
