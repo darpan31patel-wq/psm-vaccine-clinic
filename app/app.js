@@ -1430,7 +1430,7 @@ async function saveSettings(ev) {
 const plusYear = iso => iso ? `${+iso.slice(0, 4) + 1}${iso.slice(4)}` : '';
 async function openRollover() {
   const from = S.seasonStart || todayIso(), cur = seasonOf(from), next = seasonOf(plusYear(from));
-  openModal(`<h2>Start the ${esc(next)} season</h2><div id="roBody"><p class="small muted">Counting this season's patients…</p></div>`);
+  openModal(`<h2>Start the ${esc(next)} autumn/winter season (flu and COVID)</h2><div id="roBody"><p class="small muted">Counting this season's patients…</p></div>`);
   let rows;
   try { rows = (await API.exportRows(from, '9999-12-31')).filter(r => ['given', 'entered'].includes(r.status)); } catch (e) { $('#roBody').innerHTML = `<div class="alert bad">Couldn't read this season's records (${esc(e.message || e)}). Try again.</div>`; return; }
   const cards = rows.filter(r => ['Flu', 'COVID-19', 'Private flu', 'Private COVID'].includes(r.vaccine) && r.surname && (r.dob || cleanNhs(r.nhs).length === 10)).map(r => ({
@@ -1444,12 +1444,12 @@ async function openRollover() {
     ${notOnRavs ? `<div class="alert warn">${notOnRavs} vaccination${notOnRavs === 1 ? ' is' : 's are'} still not on RAVS. Enter ${notOnRavs === 1 ? 'it' : 'them'} first if you can.</div>` : ''}
     <ol class="steps">
       <li><b>${people.toLocaleString('en-GB')} patients</b> vaccinated with you in ${esc(cur)} (${cards.length.toLocaleString('en-GB')} vaccinations) are added to <b>Possible opportunity</b>, so you can contact them next season.</li>
-      <li>The dates move on a year. Check them against the new flu letter and COVID guidance:</li>
+      <li>The dates move on a year. Check them against the new flu letter and the autumn COVID guidance:</li>
     </ol>
     <div class="editgrid">${f('roSeason', 'Season starts', ns.seasonStart)}${f('roFlu', `Flu: ${S.fluAge} by`, ns.fluDate)}${f('roCov', `COVID: ${S.covAge} by`, ns.covDate)}${f('roNasalFrom', 'Nasal flu: born from', ns.nasalFrom)}${f('roNasalTo', 'Nasal flu: born up to', ns.nasalTo)}</div>
     <label class="small" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="roClear" checked> Clear batch numbers and expiry dates (new stock)</label>
-    <p class="small muted">Nothing is deleted. ${esc(cur)} stays in Records and the Excel export.</p>
-    <div class="actions"><button type="button" class="btn primary" id="roGo">Start ${esc(next)}</button><button type="button" class="btn ghost" data-close>Cancel</button></div><div id="roOut"></div>`;
+    <p class="small muted">Nothing is deleted: every ${esc(cur)} vaccination stays in the app data sheet, and you can still export it with Records → Export to Excel (Pick dates). This is not for the spring COVID programme.</p>
+    <div class="actions"><button type="button" class="btn primary" id="roGo">Start ${esc(next)} autumn/winter</button><button type="button" class="btn ghost" data-close>Cancel</button></div><div id="roOut"></div>`;
   $('#roGo').onclick = async () => {
     $('#roGo').disabled = true; const out = $('#roOut');
     try {
@@ -1459,7 +1459,7 @@ async function openRollover() {
       const s = Object.assign({}, S, { seasonStart: $('#roSeason').value, fluDate: $('#roFlu').value, covDate: $('#roCov').value, nasalFrom: $('#roNasalFrom').value, nasalTo: $('#roNasalTo').value });
       if ($('#roClear').checked) s.products = (S.products || []).map(p => Object.assign({}, p, { batch: '', expiry: '' }));
       await API.saveSettings(s);
-      closeModal(); toast(`${next} started. ${people.toLocaleString('en-GB')} patients added to Possible opportunity.`); RECALL = null; await refresh(true);
+      closeModal(); toast(`${next} autumn/winter season started. ${people.toLocaleString('en-GB')} patients added to Possible opportunity.`); RECALL = null; await refresh(true);
     } catch (e) { console.warn(e); out.innerHTML = `<div class="alert bad">Couldn't finish (${esc(e.message || e)}). Nothing is lost: press Start again.</div>`; $('#roGo').disabled = false; }
   };
 }
@@ -2016,7 +2016,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 7';
+const BUILD = '21 Oct 2026, 8';
 const whenUk = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${ukDate(isoDate(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 function renderBuild() {
   const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups")` : ' · Nightly backup not turned on yet';
