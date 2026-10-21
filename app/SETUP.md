@@ -73,7 +73,21 @@ At the start of the day, press **Open RAVS** at the top of the app and log in to
 
 ## If the internet goes down
 
-The app needs the internet to save. Carry on with your OFFLINE sheet or paper, then register those patients in the app once you're back online.
+If a save can't reach Google, the app keeps it on that computer, inside Chrome. The header shows **2 waiting to save** in red, and the saves are sent by themselves, in order, once the connection is back. Don't clear Chrome's browsing data while that badge shows.
+
+The app itself needs the internet to open. If it won't open, carry on with Offline mode, paper or your OFFLINE sheet, then register those patients once you're back online.
+
+## Backups, the change log and the app copy
+
+- **Nightly backup:** every night at about 2am, Google copies every tab of the app data sheet into a new sheet in the Drive folder **PSM Clinic backups**. The newest 30 are kept. The time of the last backup is at the bottom of Settings.
+- **Change log:** the **Changes** tab in the app data sheet lists every save, edit, delete and settings change, with who (the Operator) and when.
+- **App copy:** the same Drive folder holds **App copy - Index.html** and **App copy - app.js**. The app uses them if GitHub can't be reached. They update by themselves. Don't edit or delete them.
+
+To turn the nightly backup on (once):
+
+1. In the app data sheet, click **Extensions → Apps Script**.
+2. In the list next to **Run** at the top, choose **turnOnBackups**, then press **Run**.
+3. Google asks for permission. Choose the pharmacy account, then **Advanced → Go to … (unsafe) → Allow**. This lets the app use Google Drive for the backups.
 
 ## Updating to a new version
 

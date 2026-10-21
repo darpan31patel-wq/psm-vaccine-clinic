@@ -673,7 +673,8 @@ ol.steps { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
 
 <script id="appLoader">
 // The app code lives in app.js on GitHub. Google's page loader fails on a page this big, so only the screen layout goes
-// through it and the code is fetched here. If GitHub's raw files can't be reached, jsDelivr serves the same file.
+// through it and the code is fetched here. If GitHub's raw files can't be reached, the copy kept in the pharmacy's
+// Google Drive is used, then jsDelivr (a mirror of GitHub).
 (function () {
   var RAW = 'https://raw.githubusercontent.com/darpan31patel-wq/psm-vaccine-clinic/main/app/app.js';
   var CDN = 'https://cdn.jsdelivr.net/gh/darpan31patel-wq/psm-vaccine-clinic@main/app/app.js';
@@ -682,10 +683,16 @@ ol.steps { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
     b.innerHTML = '<div class="wrap">The app could not load (' + String(why).replace(/[<>&]/g, '') + '). Check the internet connection, then reload this page (Cmd+R).</div>';
     b.hidden = false;
   }
+  function run(code) { var s = document.createElement('script'); s.textContent = code; document.body.appendChild(s); }
   function fromCdn() { var s = document.createElement('script'); s.src = CDN; s.onerror = function () { fail('GitHub could not be reached'); }; document.body.appendChild(s); }
+  function fromDrive() {
+    if (typeof google === 'undefined' || !google.script || !google.script.run) return fromCdn();
+    google.script.run.withSuccessHandler(function (code) { if (code) { window.PSM_LOADED_FROM = 'Drive copy'; run(code); } else fromCdn(); })
+      .withFailureHandler(fromCdn).apiAppCode();
+  }
   fetch(RAW + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
-    .then(function (code) { var s = document.createElement('script'); s.textContent = code; document.body.appendChild(s); })
-    .catch(fromCdn);
+    .then(run)
+    .catch(fromDrive);
 })();
 </script>
