@@ -306,7 +306,7 @@ details.extra .fields { margin-top: 14px; }
 /* find patient / record boxes */
 .box h2 { display: flex; align-items: center; gap: 10px; }
 /* every box gets its own light colour wash (set --tint per box) */
-.panel { --tint: var(--accent); border-top: 3px solid var(--tint); border-color: color-mix(in srgb, var(--tint) 22%, var(--line)); border-top-color: var(--tint); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 24%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 9%, var(--surface)) 40%, color-mix(in srgb, var(--tint) 3%, var(--surface)) 100%); box-shadow: 0 1px 2px rgba(20, 35, 42, .04), 0 6px 18px color-mix(in srgb, var(--tint) 12%, transparent); }
+.panel { --tint: var(--accent); border-top: 4px solid var(--tint); border-color: color-mix(in srgb, var(--tint) 28%, var(--line)); border-top-color: var(--tint); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 32%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 13%, var(--surface)) 40%, color-mix(in srgb, var(--tint) 5%, var(--surface)) 100%); box-shadow: 0 1px 2px rgba(20, 35, 42, .04), 0 6px 18px color-mix(in srgb, var(--tint) 12%, transparent); }
 #box2 { --tint: var(--flu); }
 #box2 .num { background: var(--flu); }
 
@@ -455,8 +455,8 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 /* Settings: this computer / staff cards */
 .setgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 18px; margin-bottom: 18px; align-items: start; }
 @media (max-width: 980px) { .setgrid { grid-template-columns: 1fr; } }
-.panel.thispc { --tint: #b26b1e; }
-.panel.staffbox { --tint: #5a6fb5; }
+#tab-settings .panel.thispc { --tint: #b26b1e; }
+#tab-settings .panel.staffbox { --tint: #5a6fb5; }
 .p-shared { background: color-mix(in srgb, #5a6fb5 16%, var(--surface)); color: #3d4f8f; }
 .staffrows { display: grid; gap: 6px; margin-bottom: 10px; }
 .staffrow { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 15px; }
