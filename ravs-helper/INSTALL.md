@@ -6,11 +6,12 @@ Install it on the front-desk Mac (for **Search RAVS**) and on the Mac used for R
 
 ## Install
 
-1. Download `ravs-helper.zip` from the project files and double-click it to unzip. You'll get a folder called `psm-ravs-helper`.
-   - Move that folder somewhere it won't be deleted, such as Documents.
+1. Open Google Drive (signed in as the pharmacy account), go to the folder **PSM Clinic backups**, and download **PSM RAVS Helper _version_.zip**. That file is always the latest helper.
+   - Mac: double-click the zip. Windows: right-click it, then **Extract All**.
+   - You'll get a folder called `ravs-helper`. Move it somewhere it won't be deleted, such as Documents.
 2. In Chrome, go to `chrome://extensions`.
 3. Turn on **Developer mode** (top right).
-4. Click **Load unpacked** and choose the `psm-ravs-helper` folder.
+4. Click **Load unpacked** and choose the `ravs-helper` folder.
 5. Pin it: click the puzzle icon in the toolbar, then the pin next to **PSM RAVS Helper**.
 6. Reload the clinic app tab.
    - On the **To record** tab you should see "RAVS Helper is connected" and a **Fill in RAVS** button on each card.

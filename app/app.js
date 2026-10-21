@@ -387,7 +387,7 @@ async function refresh(force) {
     const sj = JSON.stringify(b.settings || {}), settingsChanged = sj !== refresh._sj; refresh._sj = sj;
     VERSION = b.version; S = Object.assign({}, DEFAULT_SETTINGS, b.settings || {}); ROWS = (b.rows || []).filter(r => r.status !== 'deleted'); DAYS = b.days || [];
     if (hasGas) applyOutbox();
-    BACKUP = { at: b.backupAt || '', copyAt: b.copyAt || '' }; renderBuild();
+    BACKUP = { at: b.backupAt || '', copyAt: b.copyAt || '', helper: b.helperVersion || '' }; renderBuild();
     // Settings saved before private vaccines existed have no private stock rows yet.
     DEFAULT_SETTINGS.products.filter(p => VACCINES[p.vaccine]?.private && !S.products.some(x => x.vaccine === p.vaccine)).forEach(p => S.products = S.products.concat([Object.assign({}, p)]));
     await loadMore();
@@ -1737,11 +1737,12 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 4';
+const BUILD = '21 Oct 2026, 5';
 const whenUk = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${ukDate(isoDate(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 function renderBuild() {
   const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups")` : ' · Nightly backup not turned on yet';
-  $('#buildInfo').textContent = `App version ${BUILD}${window.PSM_LOADED_FROM ? ` (from the ${window.PSM_LOADED_FROM}: GitHub could not be reached)` : ''} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : EXT.error ? EXT.error : 'not installed on this computer'}${backup}`;
+  const helperZip = BACKUP.helper ? ` · Helper to install: "PSM RAVS Helper ${BACKUP.helper}.zip" in that folder${EXT.ready && verLt(EXT.version, BACKUP.helper) ? ' (newer than this computer\'s, please update)' : ''}` : '';
+  $('#buildInfo').textContent = `App version ${BUILD}${window.PSM_LOADED_FROM ? ` (from the ${window.PSM_LOADED_FROM}: GitHub could not be reached)` : ''} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : EXT.error ? EXT.error : 'not installed on this computer'}${backup}${helperZip}`;
 }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
