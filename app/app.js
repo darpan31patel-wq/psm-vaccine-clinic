@@ -609,6 +609,7 @@ function demoLookup(job) {
     address: `12 Example Road, Surbiton, ${p.postcode || 'KT6 4AA'}`, gp: 'Demo Surgery, 1 High Street', history: DEMO_HISTORY } };
 }
 function onLookup(res) {
+  if (res && recallCheck && res.id === recallCheck.id) return onRecallLookup(res);
   if (!res || res.id !== form.lookupId || form.step !== 'searching') return;
   findTimers.forEach(clearTimeout); findTimers = [];
   if (res.ok) { form.step = 'found'; form.found = res.patient; } else { form.step = 'error'; form.findMsg = res.error || 'RAVS could not find this patient.'; }
@@ -1299,7 +1300,8 @@ function renderRecall() {
   const had = x => x.past.slice(0, 3).map(s => `<span class="hseason"><b>${esc(s)}</b> ${[...x.hist[s]].map(v => esc(VACCINES[v]?.short || v)).join(' + ')}</span>`).join('') + (x.past.length > 3 ? `<span class="small muted">+${x.past.length - 3} more</span>` : '');
   const act = x => x.status === 'back' ? '<span class="pill p-entered">✓ Back</span>' : x.status === 'booked' ? '<span class="pill p-booked">Booked</span>' :
     (x.p.contact ? `<span class="pill ${NOT_COMING.includes(x.p.contact) ? 'p-neutral' : 'p-given'}" title="${esc(x.p.contactBy)}">${esc(CONTACT_LABEL[x.p.contact] || x.p.contact)} ${esc(ukDate((x.p.contactAt || '').slice(0, 10)).slice(0, 5))}</span><button type="button" class="btn ghost sm" data-rcontact="" data-key="${esc(x.p.key)}">Undo</button>` : '') +
-      (x.p.contact && NOT_COMING.includes(x.p.contact) ? '' : `<button type="button" class="btn sm" data-rcontact="called" data-key="${esc(x.p.key)}">Called</button><button type="button" class="btn sm" data-rcontact="texted" data-key="${esc(x.p.key)}">Texted</button><button type="button" class="btn sm" data-rmore="${esc(x.p.key)}">More</button>`);
+      (x.p.contactNote && /^RAVS/.test(x.p.contactNote) && !NOT_COMING.includes(x.p.contact) ? `<span class="pill p-notravs" title="${esc(x.p.contactNote)}">${esc(x.p.contactNote.replace(/^RAVS (\S+): /, 'RAVS $1: '))}</span>` : '') +
+      (x.p.contact && NOT_COMING.includes(x.p.contact) ? '' : `<button type="button" class="btn sm rcheck" data-rcheck="${esc(x.p.key)}" ${recallCheck ? 'disabled' : ''}>${recallCheck && recallCheck.key === x.p.key ? 'Checking…' : 'Check on RAVS'}</button><button type="button" class="btn sm" data-rcontact="called" data-key="${esc(x.p.key)}">Called</button><button type="button" class="btn sm" data-rcontact="texted" data-key="${esc(x.p.key)}">Texted</button><button type="button" class="btn sm" data-rmore="${esc(x.p.key)}">More</button>`);
   $('#recallList').innerHTML = `<div class="panel list rlist" style="padding-block:6px">${rows.length ? rows.slice(0, recallView.show).map(x => `<div class="row">
       <div class="time" title="Age today">${x.age ?? '?'}</div>
       <div class="who"><div class="nm">${esc(fullName(x.p))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(x.p.dob))}</span>${x.p.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(x.p.nhs))}</span>` : ''}${x.p.postcode ? `<span class="mono f f-pc">${esc(x.p.postcode)}</span>` : ''}${x.p.phone ? `<span class="mono f f-phone">${esc(x.p.phone)}</span>` : ''}<span class="f f-had"><span class="hs">${had(x)}</span></span></div></div>
@@ -1310,7 +1312,47 @@ function renderRecall() {
 async function setContact(key, contact) {
   const p = (RECALL || []).find(x => x.key === key); if (!p) return;
   const patch = { contact, contactAt: contact ? `${todayIso()} ${nowTime()}` : '', contactBy: contact ? me : '' };
+  if (!contact) patch.contactNote = '';
   Object.assign(p, patch); closeModal(); renderRecall();
+  try { await API.recallContact(key, patch); } catch (e) { showError(e); }
+}
+// Check on RAVS: a staff member asks the helper to look up one recall patient and read their vaccination history.
+// One at a time, only when someone presses the button.
+let recallCheck = null;
+function startRecallCheck(key) {
+  const p = (RECALL || []).find(x => x.key === key); if (!p) return;
+  if (recallCheck) return toast('Already checking someone on RAVS. Wait for that one to finish.');
+  if (form.step === 'searching') return toast('Find patient is using RAVS right now. Try again in a moment.');
+  if (hasGas && !EXT.ready) return toast('The RAVS Helper is not connected on this computer. Open RAVS and press Check RAVS first.');
+  if (!p.nhs && !(p.dob && p.surname)) return toast('Not enough details to search RAVS for this patient.');
+  const job = { id: 'rc' + uid(), nhs: p.nhs, given: p.given, surname: p.surname, dob: p.dob, postcode: p.postcode };
+  recallCheck = { id: job.id, key, timer: setTimeout(() => { if (recallCheck && recallCheck.id === job.id) { if (EXT.ready) window.postMessage({ psm: 'app-lookup-cancel', id: job.id }, '*'); recallCheck = null; toast("RAVS didn't answer within a minute. Look at the RAVS tab, then try again."); renderRecall(); } }, 60000) };
+  renderRecall();
+  if (EXT.ready) window.postMessage({ psm: 'app-lookup', job }, '*');
+  else setTimeout(() => onLookup(demoRecallLookup(job)), 1200);
+}
+function demoRecallLookup(job) {
+  const had = +job.nhs.slice(-1) % 3;
+  const hist = ['Date\tVaccine\tProduct', had ? `${longDate(isoDate(new Date(Date.now() - 9 * 86400000)))}\tFlu\tAdjuvanted trivalent influenza vaccine` : '', had === 2 ? `${longDate(isoDate(new Date(Date.now() - 9 * 86400000)))}\tCOVID-19\tComirnaty` : '', '14 October 2025\tFlu\tAdjuvanted trivalent influenza vaccine'].filter(Boolean).join('\n');
+  return { id: job.id, ok: true, patient: { name: `${job.given} ${job.surname}`, dob: job.dob, nhs: job.nhs, history: hist } };
+}
+async function onRecallLookup(res) {
+  const { key, timer } = recallCheck; clearTimeout(timer); recallCheck = null;
+  const p = (RECALL || []).find(x => x.key === key); if (!p) return;
+  if (!res.ok) { toast(res.error || 'RAVS could not find this patient.'); return renderRecall(); }
+  const r = res.patient || {};
+  if ((p.nhs && r.nhs && cleanNhs(r.nhs) !== p.nhs) || (p.dob && r.dob && r.dob !== p.dob)) { toast('RAVS found a different patient, so nothing was saved. Use Find patient to check by hand.'); return renderRecall(); }
+  const start = S.seasonStart || todayIso();
+  const got = new Set(parseHistory(r.history).rows.map(h => ({ d: parseDob(h.date), v: /covid/i.test(h.vaccine) ? 'COVID-19' : /flu/i.test(h.vaccine) ? 'Flu' : '' })).filter(h => h.d && h.d >= start && h.v).map(h => h.v));
+  const x = recallState(p, { byNhs: new Map(), byName: new Map() });
+  const due = [x.flu && 'Flu', x.covid && 'COVID-19'].filter(Boolean);
+  const want = due.length ? due : [...new Set(x.past.flatMap(s => [...x.hist[s]].filter(v => v === 'Flu' || v === 'COVID-19')))];
+  const missing = want.filter(v => !got.has(v));
+  const when = ukDate(todayIso()).slice(0, 5);
+  const note = got.size ? `RAVS ${when}: had ${[...got].map(v => VACCINES[v].short).join(' + ')} this season${missing.length ? `, ${missing.map(v => VACCINES[v].short).join(' + ')} still due` : ''}` : `RAVS ${when}: nothing yet this season`;
+  const patch = !missing.length && got.size ? { contact: 'elsewhere', contactAt: `${todayIso()} ${nowTime()}`, contactBy: me, contactNote: note } : { contactNote: note };
+  Object.assign(p, patch); renderRecall();
+  toast(note.replace(/^RAVS \S+: /, 'RAVS: '));
   try { await API.recallContact(key, patch); } catch (e) { showError(e); }
 }
 function recallMore(key) {
@@ -1584,6 +1626,7 @@ document.addEventListener('click', async ev => {
   if (d.rcontact !== undefined && d.key) return setContact(d.key, d.rcontact);
   if (d.rmore) return recallMore(d.rmore);
   if (d.rfind) return recallFind(d.rfind);
+  if (d.rcheck) return startRecallCheck(d.rcheck);
   if (b.id === 'addProd') { S.products = readProducts().concat([{ vaccine: 'Flu', product: '', batch: '', expiry: '', active: true }]); renderProdTable(); }
 });
 document.addEventListener('change', ev => {
@@ -1625,7 +1668,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 2';
+const BUILD = '21 Oct 2026, 3';
 function renderBuild() { $('#buildInfo').textContent = `App version ${BUILD} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : 'not installed on this computer'}`; }
 renderBuild();
 // Header: Open RAVS, and a connection button that shows (and on click checks) whether RAVS and the helper are ready.
