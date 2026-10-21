@@ -1424,6 +1424,46 @@ async function saveSettings(ev) {
   await API.saveSettings(s); toast('Settings saved'); await refresh(true);
 }
 
+/* ---------- next season ---------- */
+// Starts the next season: this season's patients go into Possible opportunity, the dates move on a year,
+// and batch numbers are cleared for the new stock. Records are never deleted.
+const plusYear = iso => iso ? `${+iso.slice(0, 4) + 1}${iso.slice(4)}` : '';
+async function openRollover() {
+  const from = S.seasonStart || todayIso(), cur = seasonOf(from), next = seasonOf(plusYear(from));
+  openModal(`<h2>Start the ${esc(next)} season</h2><div id="roBody"><p class="small muted">Counting this season's patients…</p></div>`);
+  let rows;
+  try { rows = (await API.exportRows(from, '9999-12-31')).filter(r => ['given', 'entered'].includes(r.status)); } catch (e) { $('#roBody').innerHTML = `<div class="alert bad">Couldn't read this season's records (${esc(e.message || e)}). Try again.</div>`; return; }
+  const cards = rows.filter(r => ['Flu', 'COVID-19', 'Private flu', 'Private COVID'].includes(r.vaccine) && r.surname && (r.dob || cleanNhs(r.nhs).length === 10)).map(r => ({
+    surname: r.surname, given: r.given, dob: r.dob, nhs: cleanNhs(r.nhs), postcode: r.postcode, phone: r.phone, address: r.address, gender: '',
+    reason: r.eligibility && !/age|private/i.test(r.eligibility) ? r.eligibility : '', date: r.date, vaccine: r.vaccine }));
+  const people = new Set(cards.map(c => c.nhs.length === 10 ? c.nhs : nameKey(c))).size;
+  const notOnRavs = rows.filter(r => r.status === 'given' && !isPriv(r)).length;
+  const ns = { seasonStart: plusYear(from), fluDate: plusYear(S.fluDate), covDate: plusYear(S.covDate), nasalFrom: plusYear(S.nasalFrom), nasalTo: plusYear(S.nasalTo) };
+  const f = (id, label, v) => `<div class="f"><label for="${id}">${label}</label><input id="${id}" type="date" value="${esc(v)}"></div>`;
+  $('#roBody').innerHTML = `
+    ${notOnRavs ? `<div class="alert warn">${notOnRavs} vaccination${notOnRavs === 1 ? ' is' : 's are'} still not on RAVS. Enter ${notOnRavs === 1 ? 'it' : 'them'} first if you can.</div>` : ''}
+    <ol class="steps">
+      <li><b>${people.toLocaleString('en-GB')} patients</b> vaccinated with you in ${esc(cur)} (${cards.length.toLocaleString('en-GB')} vaccinations) are added to <b>Possible opportunity</b>, so you can contact them next season.</li>
+      <li>The dates move on a year. Check them against the new flu letter and COVID guidance:</li>
+    </ol>
+    <div class="editgrid">${f('roSeason', 'Season starts', ns.seasonStart)}${f('roFlu', `Flu: ${S.fluAge} by`, ns.fluDate)}${f('roCov', `COVID: ${S.covAge} by`, ns.covDate)}${f('roNasalFrom', 'Nasal flu: born from', ns.nasalFrom)}${f('roNasalTo', 'Nasal flu: born up to', ns.nasalTo)}</div>
+    <label class="small" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="roClear" checked> Clear batch numbers and expiry dates (new stock)</label>
+    <p class="small muted">Nothing is deleted. ${esc(cur)} stays in Records and the Excel export.</p>
+    <div class="actions"><button type="button" class="btn primary" id="roGo">Start ${esc(next)}</button><button type="button" class="btn ghost" data-close>Cancel</button></div><div id="roOut"></div>`;
+  $('#roGo').onclick = async () => {
+    $('#roGo').disabled = true; const out = $('#roOut');
+    try {
+      const existing = (await API.recallGet()).map(p => Object.assign({}, p));
+      const changed = mergeRecall(existing, cards);
+      for (let i = 0; i < changed.length; i += 1000) { out.innerHTML = `<p class="small muted">Adding patients ${Math.min(i + 1000, changed.length).toLocaleString('en-GB')} of ${changed.length.toLocaleString('en-GB')}…</p>`; await API.recallSave(changed.slice(i, i + 1000)); }
+      const s = Object.assign({}, S, { seasonStart: $('#roSeason').value, fluDate: $('#roFlu').value, covDate: $('#roCov').value, nasalFrom: $('#roNasalFrom').value, nasalTo: $('#roNasalTo').value });
+      if ($('#roClear').checked) s.products = (S.products || []).map(p => Object.assign({}, p, { batch: '', expiry: '' }));
+      await API.saveSettings(s);
+      closeModal(); toast(`${next} started. ${people.toLocaleString('en-GB')} patients added to Possible opportunity.`); RECALL = null; await refresh(true);
+    } catch (e) { console.warn(e); out.innerHTML = `<div class="alert bad">Couldn't finish (${esc(e.message || e)}). Nothing is lost: press Start again.</div>`; $('#roGo').disabled = false; }
+  };
+}
+
 /* ---------- modal ---------- */
 function openModal(html) { $('#modalHost').innerHTML = `<div class="scrim" data-scrim><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`; }
 function closeModal() { $('#modalHost').innerHTML = ''; }
@@ -1587,7 +1627,8 @@ function renderRecall() {
   const chip = (attr, val, cur, label, cls = '') => `<button type="button" class="chip small ${cls}" data-${attr}="${val}" aria-pressed="${cur === val}">${label}</button>`;
   $('#recallFilters').innerHTML = `<div class="vaxpick">${[['todo', 'To contact'], ['contacted', 'Contacted'], ['booked', 'Booked'], ['back', 'Back this season'], ['gone', 'Not coming']].map(([v, l]) => chip('rstatus', v, recallView.status, `${l} <span class="pr">${n(v).toLocaleString('en-GB')}</span>`)).join('')}</div>
     <div class="vaxpick">${chip('rwho', 'all', recallView.who, 'Everyone')}${chip('rwho', 'flu', recallView.who, `Flu ${S.fluAge}+`, 'flu')}${chip('rwho', 'covid', recallView.who, `COVID ${S.covAge}+`, 'covid')}${chip('rwho', 'young', recallView.who, `Under ${S.fluAge}`)}
-    <span class="vsep"></span>${chip('rseen', 'last', recallView.seen, `Came in ${last}`)}${chip('rseen', 'any', recallView.seen, 'Any year')}</div>`;
+    <span class="vsep"></span>${chip('rseen', 'last', recallView.seen, `Came in ${last}`)}${chip('rseen', 'any', recallView.seen, 'Any year')}</div>
+    <p class="small muted rseasons">${seasonsLoaded()}</p>`;
   const q = recallView.q.trim().toLowerCase(), qn = cleanNhs(q), qd = parseDob(q);
   const rows = seen.filter(x => x.status === recallView.status && inWho(x) && (!q || (qn.length >= 6 && x.p.nhs.includes(qn)) || (qd && x.p.dob === qd) || `${x.p.given} ${x.p.surname} ${x.p.surname} ${x.p.postcode}`.toLowerCase().includes(q)))
     .sort((a, b) => b.last.localeCompare(a.last) || (b.covid - a.covid) || (b.flu - a.flu) || a.p.surname.localeCompare(b.p.surname) || a.p.given.localeCompare(b.p.given));
@@ -1605,6 +1646,13 @@ function renderRecall() {
       <div class="right">${due(x)}${act(x)}<button type="button" class="btn sm primary" data-rfind="${esc(x.p.key)}" title="Fill in Find patient on Register patient">Find patient</button></div></div>`).join('') +
     (rows.length > recallView.show ? `<div class="row" style="grid-template-columns:1fr"><button type="button" class="btn" data-rshowmore>Show more (${(rows.length - recallView.show).toLocaleString('en-GB')} left)</button></div>` : '')
     : '<div class="empty">Nobody here.</div>'}</div>`;
+}
+// Which seasons the list holds, so it's easy to see which old sheets have been added.
+function seasonsLoaded() {
+  const per = {};
+  (RECALL || []).forEach(p => Object.keys(historyMap(p.history)).forEach(s => { per[s] = (per[s] || 0) + 1; }));
+  const ss = Object.keys(per).sort();
+  return ss.length ? `Seasons loaded: ${ss.map(s => `<b>${esc(s)}</b> ${per[s].toLocaleString('en-GB')} patients`).join(' · ')}` : '';
 }
 async function setContact(key, contact) {
   const p = (RECALL || []).find(x => x.key === key); if (!p) return;
@@ -1915,6 +1963,7 @@ document.addEventListener('click', async ev => {
   if (b.id === 'offlineBtn') { offline = !offline; store.set('psm.offline', offline); form.findMsg = ''; if (!['find', 'error'].includes(form.step)) clearForm(); return renderFind(); }
   if (b.id === 'exportBtn') return exportExcel();
   if (b.id === 'recallAdd') return openRecallImport();
+  if (b.id === 'rolloverBtn') return openRollover();
   if (b.id === 'recallExport') return exportRecall();
   if (d.rstatus) { recallView.status = d.rstatus; recallView.show = 200; return renderRecall(); }
   if (d.rwho) { recallView.who = d.rwho; recallView.show = 200; return renderRecall(); }
@@ -1967,7 +2016,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 6';
+const BUILD = '21 Oct 2026, 7';
 const whenUk = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${ukDate(isoDate(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 function renderBuild() {
   const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups")` : ' · Nightly backup not turned on yet';
