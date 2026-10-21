@@ -1327,7 +1327,7 @@ async function rcRun() {
   const app = (await API.exportRows(from, to)).filter(r => !isPriv(r) && (r.status === 'given' || r.status === 'entered') && (VACCINES[r.vaccine]?.target || 'RAVS') === 'RAVS')
     .map(r => ({ ...r, kind: rcKind(VACCINES[r.vaccine]?.ravs || r.vaccine) }));
   const res = RC.result = rcCompare(ravs, app);
-  // Patients from before the app was used are in the old season sheet (Recall tab). Those count as accounted for.
+  // Patients from before the app was used are in the old season sheet (Possible opportunity tab). Those count as accounted for.
   let recall = []; try { recall = await API.recallGet(); } catch (e) { console.warn(e); }
   const inSheet = rcInOldSheet(recall);
   res.oldSheet = res.ravsOnly.filter(inSheet); res.ravsOnly = res.ravsOnly.filter(p => !inSheet(p));
@@ -1343,7 +1343,7 @@ async function rcRun() {
     <div class="tiles rctiles">${tile('Matched', res.matched.length + res.moved.length, 'ok')}${tile('In the app, not on RAVS', res.appOnly.length, res.appOnly.length ? 'bad' : 'ok')}${tile('On RAVS, not in the app', res.ravsOnly.length, res.ravsOnly.length ? 'warn' : 'ok')}${tile('Different date', res.moved.length, res.moved.length ? 'warn' : 'ok')}${res.oldSheet.length ? tile('In your old sheet', res.oldSheet.length, '') : ''}</div>
     ${res.appOnly.length ? group('In the app, not on RAVS', 'bad', res.appOnly, appLine, 'Given here but missing from the RAVS file. Enter these on RAVS (Edit, then Fill in RAVS again).') : ''}
     ${res.ravsOnly.length ? group('On RAVS, not in the app', 'warn', res.ravsOnly, p => line(p, p.vaccineText ? `<span class="f">${esc(p.vaccineText)}</span>` : ''), 'On RAVS but not registered in the app (or the old sheet). If they were vaccinated here, add them to the app.') + addBtn(res.ravsOnly.filter(p => RC_KIND_VAX[p.kind]), `Add ${res.ravsOnly.length === 1 ? 'it' : 'all ' + res.ravsOnly.length} to the app`) : ''}
-    ${res.oldSheet.length ? `<details class="rcgroup rcold"><summary><h3>In your old sheet, not in the app <span class="count">${res.oldSheet.length}</span></h3></summary><p class="small muted">On RAVS and in the old season sheet (Recall tab), from before you used the app. Nothing missing. Add them so the app has the whole season.</p><div class="list">${res.oldSheet.map(p => line(p)).join('')}</div></details>${addBtn(res.oldSheet, `Add ${res.oldSheet.length === 1 ? 'it' : 'all ' + res.oldSheet.length} to the app`)}` : ''}
+    ${res.oldSheet.length ? `<details class="rcgroup rcold"><summary><h3>In your old sheet, not in the app <span class="count">${res.oldSheet.length}</span></h3></summary><p class="small muted">On RAVS and in the old season sheet (Possible opportunity tab), from before you used the app. Nothing missing. Add them so the app has the whole season.</p><div class="list">${res.oldSheet.map(p => line(p)).join('')}</div></details>${addBtn(res.oldSheet, `Add ${res.oldSheet.length === 1 ? 'it' : 'all ' + res.oldSheet.length} to the app`)}` : ''}
     ${res.moved.length ? group('Different date', 'warn', res.moved, m => line(m.app, `<span class="f">App ${esc(ukDate(m.app.date))}, RAVS ${esc(ukDate(m.ravs.date))}</span>`), 'Same patient and vaccine, but the dates differ. Check which one is right.') : ''}
     ${res.notMarked.length ? `<div class="alert info rcmark"><span>${res.notMarked.length} matched ${res.notMarked.length === 1 ? 'vaccination shows' : 'vaccinations show'} "Not on RAVS yet" in the app.</span><button type="button" class="btn sm" id="rcMark">Mark ${res.notMarked.length === 1 ? 'it' : 'them'} as On RAVS</button></div>` : ''}
     ${pick}`;
@@ -1668,7 +1668,7 @@ async function exportRecall() {
   const rows = recallList._shown || [];
   if (!rows.length) return toast('Nothing in this list to download.');
   try {
-    const ExcelJS = await loadExcelJs(), wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Recall');
+    const ExcelJS = await loadExcelJs(), wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Possible opportunity');
     const cols = [['Surname', x => x.p.surname, 16], ['First name', x => x.p.given, 14], ['Date of birth', x => ukDate(x.p.dob), 12], ['Age', x => x.age ?? '', 6], ['NHS number', x => fmtNhs(x.p.nhs), 14],
       ['Phone', x => x.p.phone, 14], ['Postcode', x => x.p.postcode, 10], ['Address', x => x.p.address, 36], ['Due by age', x => [x.flu && 'Flu', x.covid && 'COVID'].filter(Boolean).join(', ') || 'Needs a reason', 14],
       ['Reason before', x => x.p.reason, 18], ['Had with us', x => x.p.history, 34], ['Contact', x => CONTACT_LABEL[x.p.contact] || '', 14], ['Contacted on', x => ukDate((x.p.contactAt || '').slice(0, 10)), 12], ['By', x => x.p.contactBy, 12]];
@@ -1677,7 +1677,7 @@ async function exportRecall() {
     rows.forEach(x => ws.addRow(cols.map(c => c[1](x) ?? '')));
     ws.views = [{ state: 'frozen', ySplit: 1 }];
     const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PSM recall list ${ukDate(todayIso()).replace(/\//g, '-')}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `PSM possible opportunity ${ukDate(todayIso()).replace(/\//g, '-')}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
   } catch (e) { console.warn(e); toast("Couldn't make the Excel file. Check the internet connection and try again."); }
 }
 
@@ -1791,10 +1791,10 @@ function mergeRecall(existing, cards) {
 }
 function openRecallImport() {
   openModal(`<h2>Add old season files</h2>
-    <p class="small" style="margin-top:0">In each old Google Sheet, click <b>File → Download → Microsoft Excel (.xlsx)</b>. Then choose the downloaded files here (you can pick several at once). They're read on this computer; only the patients found are saved, to the Recall tab of the app data sheet.</p>
+    <p class="small" style="margin-top:0">In each old Google Sheet, click <b>File → Download → Microsoft Excel (.xlsx)</b>. Then choose the downloaded files here (you can pick several at once). They're read on this computer; only the patients found are saved, in the app data sheet.</p>
     <input type="file" id="rcFiles" accept=".xlsx,.xls,.csv" multiple>
     <div id="rcOut" style="margin-top:12px"></div>
-    <div class="actions"><button type="button" class="btn primary" id="rcSave" disabled>Add to recall list</button><button type="button" class="btn ghost" data-close>Close</button></div>`);
+    <div class="actions"><button type="button" class="btn primary" id="rcSave" disabled>Add to the list</button><button type="button" class="btn ghost" data-close>Close</button></div>`);
   let cards = [];
   $('#rcFiles').onchange = async ev => {
     const files = [...ev.target.files]; cards = []; $('#rcSave').disabled = true;
@@ -1967,7 +1967,7 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 5';
+const BUILD = '21 Oct 2026, 6';
 const whenUk = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${ukDate(isoDate(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 function renderBuild() {
   const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups")` : ' · Nightly backup not turned on yet';

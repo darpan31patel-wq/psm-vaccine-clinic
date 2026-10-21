@@ -517,7 +517,7 @@ ol.steps { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
       <button type="button" role="tab" data-tab="todo" aria-selected="false">To enter onto RAVS <span class="count" id="cTodo"></span></button>
       <button type="button" role="tab" data-tab="bookings" aria-selected="false">Bookings <span class="count" id="cBook"></span></button>
       <button type="button" role="tab" data-tab="private" aria-selected="false">Private <span class="count" id="cPriv"></span></button>
-      <button type="button" role="tab" data-tab="recall" aria-selected="false">Recall <span class="count" id="cRecall"></span></button>
+      <button type="button" role="tab" data-tab="recall" aria-selected="false">Possible opportunity <span class="count" id="cRecall"></span></button>
       <button type="button" role="tab" data-tab="records" aria-selected="false">Records</button>
       <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings</button>
     </nav>
@@ -623,8 +623,8 @@ ol.steps { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
 
 <!-- RECALL -->
 <section class="tab" id="tab-recall">
-  <div class="pagehead"><h2>Recall</h2><span class="hsub small muted">Past patients who haven't come in this season</span><span class="sp"></span>
-    <input id="recallSearch" class="rsearch" placeholder="Search name, NHS number, DOB, postcode" aria-label="Search the recall list">
+  <div class="pagehead"><h2>Possible opportunity</h2><span class="hsub small muted">Past patients who haven't come in this season</span><span class="sp"></span>
+    <input id="recallSearch" class="rsearch" placeholder="Search name, NHS number, DOB, postcode" aria-label="Search the possible opportunity list">
     <button class="btn" id="recallExport" type="button">Download list</button><button class="btn primary" id="recallAdd" type="button">Add old season files</button></div>
   <div class="tiles" id="recallTiles"></div>
   <div class="rfilters" id="recallFilters"></div>
