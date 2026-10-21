@@ -19,6 +19,7 @@ PSM RAVS Helper is a Chrome extension used only by staff at PSM Pharmacy. It cop
 
 - It never presses "Confirm and save" on RAVS. Staff check every page and save it themselves.
 - It doesn't read or change any other website. On Google pages it only runs inside the PSM clinic app.
+- Its access to script.google.com is only used to read the address of the clinic app's tab. The helper links itself to the pharmacy's own copy of the app and never passes patient details to any other page.
 - Data is never sold, shared or used for anything other than recording the pharmacy's own vaccinations.
 
 ## Contact

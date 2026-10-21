@@ -9,7 +9,7 @@ Once the helper is on the Web Store, every computer updates it automatically. No
 - The pharmacy Google account, with 2-Step Verification turned on: https://myaccount.google.com/signinoptions/twosv
 - A bank card for Google's one-off US$5 developer fee.
 - The files in this folder:
-  - **psm-ravs-helper-0.5.7.zip**: the helper itself. Upload it as it is, don't unzip it.
+  - **psm-ravs-helper-0.5.8.zip**: the helper itself. Upload it as it is, don't unzip it.
   - **screenshot-1-app.png** and **screenshot-2-ravs.png**: 1280×800, dummy data only.
   - **promo-tile-440x280.png**
   - The text to paste, further down this page.
@@ -27,7 +27,7 @@ Once the helper is on the Web Store, every computer updates it automatically. No
 ## Step 2. Upload the helper
 
 1. Click **Items** on the left, then **+ New item** at the top right.
-2. Choose **psm-ravs-helper-0.5.7.zip** and press **Upload**.
+2. Choose **psm-ravs-helper-0.5.8.zip** and press **Upload**.
 
 ## Step 3. Store listing tab
 
@@ -65,7 +65,7 @@ Press **Save draft**.
 
 - **Host permission justification:**
 
-  > ravs.england.nhs.uk: to fill in the Record a vaccination pages and read the "Vaccination saved" result. googleusercontent.com: the pharmacy's clinic app is a Google Apps Script web app, which Google serves from script.googleusercontent.com. The helper only acts on the page that carries the clinic app's marker, and does nothing on any other Google page.
+  > ravs.england.nhs.uk: to fill in the Record a vaccination pages and read the "Vaccination saved" result. googleusercontent.com: the pharmacy's clinic app is a Google Apps Script web app, which Google serves from script.googleusercontent.com. script.google.com: to read the address of the clinic app's tab, so the helper links itself to the pharmacy's own copy of the app and never passes patient details to any other page. The helper only acts on the page that carries the clinic app's marker, and does nothing on any other Google page.
 
 - **Are you using remote code?** No, I am not using remote code.
 - **Data usage.** Tick these:
@@ -93,9 +93,9 @@ Google reviews it, even though it's unlisted. That usually takes a few days, and
 ## Step 7. Install it on each computer (after approval)
 
 1. In the developer dashboard, open the item and copy its **Store link**. It looks like `https://chromewebstore.google.com/detail/psm-ravs-helper/…`
-2. On each computer, signed in to the pharmacy Chrome profile, open the link and press **Add to Chrome**.
+2. On each computer, signed in to the pharmacy Chrome profile, open the link and press **Add to Chrome**. The helper links itself to the first clinic app it sees, so open the app from the usual **PSM Clinic** bookmark.
 3. Go to **chrome://extensions** and press **Remove** on the old "PSM RAVS Helper" that says **Unpacked**. Keep the new one. Don't run both at once.
-4. Close the RAVS window and reload the clinic app. Settings should show RAVS Helper 0.5.7.
+4. Close the RAVS window and reload the clinic app. Settings should show RAVS Helper 0.5.8.
 
 ## Future updates
 
