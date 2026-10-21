@@ -6,7 +6,7 @@ PSM RAVS Helper is a Chrome extension used only by staff at PSM Pharmacy. It cop
 
 - Patient details the clinic app sends it to record a vaccination: name, date of birth, NHS number, postcode, the vaccine, batch, vaccinator, reason, consent, injection site and any note.
 - What RAVS shows after a patient search (address, GP and NHS number), which it passes back to the clinic app.
-- The list of vaccinator names shown on RAVS.
+- The list of vaccinators shown on RAVS, with the email address RAVS shows next to each name.
 - When staff press Get RAVS export in the clinic app: the pharmacy's own RAVS vaccination report (made on RAVS's Reports pages for dates staff choose), which it passes to the clinic app's RAVS check.
 
 ## Where it goes

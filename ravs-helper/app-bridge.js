@@ -33,7 +33,7 @@
   function sendVaccinators() {
     if (!isApp()) return;
     chrome.storage.local.get({ ravsVaccinators: null }, ({ ravsVaccinators }) => {
-      if (ravsVaccinators) window.postMessage({ psm: 'ext-vaccinators', names: ravsVaccinators.names, at: ravsVaccinators.at }, '*');
+      if (ravsVaccinators) window.postMessage({ psm: 'ext-vaccinators', names: ravsVaccinators.names, emails: ravsVaccinators.emails || {}, at: ravsVaccinators.at }, '*');
     });
   }
 

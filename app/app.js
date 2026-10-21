@@ -163,6 +163,7 @@ const DEFAULT_SETTINGS = {
   locations: ['Pharmacy', 'Off-site: Kingston Council'],
   fluAge: 65, fluDate: '2027-03-31', covAge: 75, covDate: '2027-01-31', seasonStart: '2026-09-01',
   nasalFrom: '2022-09-01', nasalTo: '2024-08-31',
+  stockDays: 3, stockTake: null,
 };
 
 const hasGas = typeof google !== 'undefined' && google.script && google.script.run;
@@ -175,6 +176,9 @@ const Demo = (() => {
   const KEY = 'psmClinicDemo.v3';
   let db = store.get(KEY, null);
   if (db) db.rows.forEach(r => { if (r.status === 'waiting') { r.status = 'given'; r.givenAt = r.givenAt || `${r.date} ${r.time}`; } });
+  // Demo data saved before the RAVS-style vaccinator list: add the made-up RAVS names and emails.
+  if (db && db.settings && !db.settings.ravsVaccinators) Object.assign(db.settings, { ravsVaccinators: ['Front Desk', 'A. Vaccinator', 'B. Pharmacist', 'C. Locum'], ravsVaccinatorsAt: isoDate(new Date()) + 'T09:00:00',
+    ravsVaccinatorEmails: { 'A. Vaccinator': 'a.vaccinator@example.nhs.net', 'B. Pharmacist': 'b.pharmacist@example.nhs.net', 'C. Locum': 'c.locum@example.nhs.net' } });
   function save() { db.version++; store.set(KEY, db); }
   function nhsWithCheck(base9) { for (;;) { let sum = 0; for (let i = 0; i < 9; i++) sum += +base9[i] * (10 - i); let c = 11 - (sum % 11); if (c === 11) c = 0; if (c !== 10) return base9 + c; base9 = String(+base9 + 1); } }
   function seed() {
@@ -187,6 +191,9 @@ const Demo = (() => {
     S.products[4].batch = 'DEMO-PF55'; S.products[4].expiry = '2027-04-30';
     S.products[5].batch = 'DEMO-PC66'; S.products[5].expiry = '2027-02-28';
     S.vaccinators = ['A. Vaccinator', 'B. Pharmacist']; S.vaccinator = 'A. Vaccinator'; S.staff = ['Front desk 1', 'Front desk 2'];
+    S.ravsVaccinators = ['Front Desk', 'A. Vaccinator', 'B. Pharmacist', 'C. Locum']; S.ravsVaccinatorsAt = isoDate(new Date()) + 'T09:00:00';
+    S.ravsVaccinatorEmails = { 'A. Vaccinator': 'a.vaccinator@example.nhs.net', 'B. Pharmacist': 'b.pharmacist@example.nhs.net', 'C. Locum': 'c.locum@example.nhs.net' };
+    S.stockTake = { date: isoDate(new Date(Date.now() - 4 * 86400000)), time: '17:40', by: 'Front desk 2' };
     const people = [
       ['Sample', 'Alice', '1948-02-14', 'KT6 1AA', ['Flu', 'COVID-19'], 'entered', y],
       ['Example', 'Brian', '1955-07-30', 'KT6 2BB', ['Flu'], 'given', y],
@@ -371,9 +378,9 @@ let me = store.get('psm.meDay', '') === todayIso() ? store.get('psm.me', '') : '
 let form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' };
 // Offline mode (RAVS down) stays on for this computer until it is switched off.
 let offline = !!store.get('psm.offline', false);
-// Vaccinator on duty is chosen per computer (two vaccinators can work at once); the shared setting is only the default.
-let myVax = store.get('psm.vax', '');
-const vaxOnDuty = () => (myVax && (S.vaccinators || []).includes(myVax)) ? myVax : (S.vaccinator || '');
+// One vaccinator for the whole clinic, shared by every computer (operators are chosen per computer).
+store.set('psm.vax', '');
+const vaxOnDuty = () => S.vaccinator || '';
 let todoFilter = 'All';
 let editing = null;
 
@@ -466,14 +473,14 @@ function renderMe() {
   // Operators come only from the Operators list in Settings; vaccinators are a separate list.
   const people = [...new Set(S.staff || [])];
   if (me && !people.includes(me)) { me = ''; store.set('psm.me', ''); }
-  const html = (people.length ? '<option value="">Choose your name</option>' : '<option value="">No names yet: add them in Settings</option>') + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('');
+  const html = (people.length ? '<option value="">Choose your name</option>' : '<option value="">No names yet</option>') + people.map(p => `<option ${p === me ? 'selected' : ''}>${esc(p)}</option>`).join('') + '<option value="__add">+ Add a name…</option>';
   $('#meSel').innerHTML = html; $('#sOperator').innerHTML = html;
   $('#opBox').classList.toggle('empty', !me);
 }
 // Nothing can be entered until the operator box has a name. Trying anyway makes the box flash red.
 function flashOperator() {
   // No names set up yet: take them to Settings to add one.
-  if (!$$('#meSel option').some(o => o.value)) { showTab('settings'); toast('Add your name under Operators in Settings, press Save, then choose it in the Operator box.'); const st = $('#sStaff'); if (st) st.focus(); return; }
+  if (!(S.staff || []).length) return openAddOperator();
   const box = $('#opBox'); box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
   window.scrollTo({ top: 0, behavior: 'smooth' }); $('#meSel').focus();
   toast('Choose the operator first (top right).');
@@ -483,7 +490,7 @@ function flashOperator() {
   const t = ev.target;
   if (!(t instanceof Element) || !t.closest('main, .scrim')) return;
   // Settings always stays open, so names can be added and batches changed.
-  if (t.closest('#tab-settings')) return;
+  if (t.closest('#tab-settings, [data-noguard]')) return;
   if (type === 'keydown' && ev.key === 'Tab') return;
   ev.preventDefault(); ev.stopPropagation(); if (t.blur) t.blur();
   flashOperator();
@@ -877,12 +884,63 @@ function onDobInput() {
 }
 
 /* ---------- vaccinator ---------- */
+// Shown as RAVS shows them on "Who is the vaccinator?": "Name (email)" when the helper has read the email.
+const vaxEmail = n => (S.ravsVaccinatorEmails || {})[n] || '';
+const vaxLabel = n => `<span class="nm">${esc(n)}</span>${vaxEmail(n) ? ` <span class="em">(${esc(vaxEmail(n))})</span>` : ''}`;
+function ravsVaxRadios(group) {
+  const names = S.vaccinators || [];
+  return `<div class="ravsq"><div class="rq-h">Who is the vaccinator?</div><p class="rq-hint">One vaccinator for the clinic. Changing it here changes it on every computer.</p>` +
+    (names.length ? names.map((n, i) => `<label class="ravsr"><input type="radio" name="${group}" value="${esc(n)}" data-vaxon ${n === vaxOnDuty() ? 'checked' : ''}><span class="rc"></span><span>${vaxLabel(n)}</span></label>`).join('')
+      : `<p class="rq-empty">No vaccinators yet. Add them under Staff in Settings.</p>`) + `</div>`;
+}
+function setVaxOnDuty(n) { if (n && n !== S.vaccinator) saveStaff({ vaccinator: n }, `${n} is now the vaccinator on every computer.`); }
+function openVaxPicker() {
+  openModal(`<div data-noguard>${ravsVaxRadios('vaxM')}<button type="button" class="ravsbtn-go" data-close>Continue</button></div>`);
+  $('#modalHost .modal').classList.add('narrow');
+}
+// Staff lists are saved on their own, straight away, so nobody has to press Save or type them on each computer.
+async function saveStaff(patch, msg) {
+  try { await API.saveSettings(Object.assign({}, S, patch)); } catch (e) { return toast("Couldn't save. Check the internet connection and try again."); }
+  if (msg) toast(msg); await refresh(true);
+}
+function addOperator(name) {
+  name = String(name || '').replace(/\s+/g, ' ').trim(); if (!name) return false;
+  const staff = S.staff || [];
+  if (staff.some(x => x.toLowerCase() === name.toLowerCase())) { toast(`${name} is already on the list.`); return true; }
+  return saveStaff({ staff: staff.concat([name]) }, `${name} added for every computer.`).then(() => true);
+}
+function openAddOperator() {
+  openModal(`<div data-noguard style="display:grid;gap:12px"><h2>Add an operator</h2><p class="small muted">The person doing the admin. Saved for every computer.</p>
+    <div class="staffadd"><input id="opNew" placeholder="Name" autocomplete="off"><button type="button" class="btn primary" id="opNewGo">Add</button></div>
+    <div class="actions"><button type="button" class="btn ghost" data-close>Cancel</button></div></div>`);
+  $('#modalHost .modal').classList.add('narrow');
+  // Once saved, the new name is chosen in the Operator box, as if picked from the list.
+  const go = async () => { const n = $('#opNew').value.replace(/\s+/g, ' ').trim(); if (!n) return $('#opNew').focus(); closeModal(); await addOperator(n);
+    const sel = $('#meSel'), opt = [...sel.options].find(o => o.value.toLowerCase() === n.toLowerCase()); if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event('change', { bubbles: true })); } };
+  $('#opNewGo').onclick = go; $('#opNew').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+  $('#opNew').focus();
+}
+// Stock take: due every few days (Settings); marking it done is shared, so it clears on every computer.
+const shortDay = iso => { if (!iso) return ''; const d = new Date(iso + 'T12:00:00'); return `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`; };
+const addDaysIso = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoDate(d); };
+function stockTake() {
+  const every = Math.max(0, Math.round(+S.stockDays || 0)), last = S.stockTake && S.stockTake.date ? S.stockTake : null;
+  if (!every) return { every, last, due: false, next: '' };
+  const next = last ? addDaysIso(last.date, every) : todayIso();
+  return { every, last, next, due: todayIso() >= next };
+}
+async function stockDone() {
+  await saveStaff({ stockTake: { date: todayIso(), time: nowTime(), by: me } });
+  const st = stockTake(); toast(`Stock take marked done. Next due ${shortDay(st.next)}.`);
+}
 function renderVax() {
   const prods = (S.products || []).filter(p => p.active);
   const noBatch = prods.filter(p => !p.batch);
-  $('#defaultsBar').innerHTML = `<span><b>Today</b></span><span>Vaccinator <b>${esc(vaxOnDuty() || 'not set')}</b></span><span>Site <b>${esc(S.site)}</b></span><span>Consent <b>${esc(S.consent)}</b></span>` +
+  const st = stockTake();
+  $('#defaultsBar').innerHTML = `<span><b>Today</b></span><button type="button" class="vaxbtn ${vaxOnDuty() ? '' : 'unset'}" data-vaxpick title="Who is the vaccinator? (every computer)">Vaccinator <b>${esc(vaxOnDuty() || 'not set')}</b></button><span>Site <b>${esc(S.site)}</b></span><span>Consent <b>${esc(S.consent)}</b></span>` +
     `<span title="${esc(prods.map(p => `${shortProduct(p.product)}: ${p.batch || 'no batch'}`).join('\n'))}">${noBatch.length ? `<span class="warnx">${noBatch.length} batch${noBatch.length > 1 ? 'es' : ''} not set</span>` : `Batches <b>${prods.length} set</b>`}</span>` +
-    `<button class="btn sm ghost" data-goto="settings" type="button">Change</button>`;
+    `<button class="btn sm ghost" data-goto="settings" type="button">Change</button>` +
+    (st.due ? `<span class="stockdue">Stock take due <small>${st.last ? `last done ${esc(shortDay(st.last.date))}${st.last.by ? ', ' + esc(st.last.by) : ''}` : 'not done yet'}</small><button type="button" class="btn sm" data-stockdone>Done</button></span>` : '');
   const t = todayIso();
   const vs = visits(ROWS.filter(r => r.date === t));
   // There is no waiting list any more: every registration is saved as vaccinated.
@@ -1387,21 +1445,32 @@ async function rcAdd(btn, items) {
 function rcBindMap() { $$('[data-rcmap]').forEach(s => s.onchange = () => { s.value === '' ? delete RC.map[s.dataset.rcmap] : RC.map[s.dataset.rcmap] = +s.value; rcRun(); }); }
 
 /* ---------- settings ---------- */
+// Unsaved changes in the Clinic settings form survive a refresh (another computer saving, or a staff list change here).
+let setDirty = false;
 function renderSettings() {
   const opt = (list, cur) => list.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
-  $('#sVaccinator').innerHTML = '<option value=""></option>' + opt(S.vaccinators || [], vaxOnDuty());
+  renderStaff();
+  if (setDirty) return;
   $('#sSite').innerHTML = opt(SITES, S.site); $('#sConsent').innerHTML = opt(CONSENTS, S.consent);
-  // Once the helper has read RAVS's "Who is the vaccinator?" page, names can only be picked from RAVS, never typed.
-  const fromRavs = (S.ravsVaccinators || []).length > 0;
-  $('#sVaccinators').hidden = fromRavs;
-  $('#sVaxRavs').hidden = !fromRavs;
-  $('#sVaxRavs').innerHTML = (S.ravsVaccinators || []).map(n => `<button type="button" class="chip small" data-ravsvax="${esc(n)}" aria-pressed="${(S.vaccinators || []).includes(n)}">${esc(n)}</button>`).join('');
-  $('#sVaxHint').textContent = fromRavs ? `Names as RAVS shows them (read ${S.ravsVaccinatorsAt ? ukDate(S.ravsVaccinatorsAt.slice(0, 10)) : ''}). Tap to choose who vaccinates here.`
-    : "One per line, exactly as RAVS shows them under \"Who is the vaccinator?\". After the RAVS Helper has been on that page once, this becomes a list from RAVS and can't be mistyped.";
-  $('#sVaccinators').value = (S.vaccinators || []).join('\n'); $('#sStaff').value = (S.staff || []).join('\n'); $('#sLocations').value = (S.locations || []).join('\n');
+  $('#sLocations').value = (S.locations || []).join('\n');
+  const st = stockTake(); $('#sStockDays').value = st.every;
+  $('#sStockHint').textContent = !st.every ? 'Off. Set a number of days to turn the reminder on.' : `${st.last ? `Last done ${shortDay(st.last.date)}${st.last.by ? ' by ' + st.last.by : ''}. ` : ''}${st.due ? 'Due now.' : 'Next due ' + shortDay(st.next) + '.'}`;
   $('#sPrivFlu').value = priceOf('Private flu'); $('#sPrivCov').value = priceOf('Private COVID');
   $('#sFluAge').value = S.fluAge; $('#sFluDate').value = S.fluDate; $('#sCovAge').value = S.covAge; $('#sCovDate').value = S.covDate; $('#sSeason').value = S.seasonStart; $('#sNasalFrom').value = S.nasalFrom; $('#sNasalTo').value = S.nasalTo;
   renderProdTable();
+}
+function renderStaff() {
+  $('#sVaxPick').innerHTML = ravsVaxRadios('vaxS');
+  // Once the helper has read RAVS's "Who is the vaccinator?" page, names can only be picked from RAVS, never typed.
+  const ravs = S.ravsVaccinators || [], mine = S.vaccinators || [];
+  $('#sVaxList').innerHTML = ravs.length
+    ? `<div class="staffrows">${ravs.map(n => `<div class="staffrow ${mine.includes(n) ? '' : 'off'}"><span>${vaxLabel(n)}</span><span class="sp"></span><button type="button" class="switch" data-ravsvax="${esc(n)}" aria-pressed="${mine.includes(n)}">${mine.includes(n) ? 'Vaccinates here' : 'Not a vaccinator'}</button></div>`).join('')}</div>
+       <p class="small muted">Exactly as RAVS lists them under "Who is the vaccinator?" (read ${S.ravsVaccinatorsAt ? shortDay(S.ravsVaccinatorsAt.slice(0, 10)) : ''}). Someone new appears here once they're added on RAVS and the helper next fills that page.</p>`
+    : `<div class="staffrows">${mine.map(n => `<div class="staffrow"><span>${vaxLabel(n)}</span><span class="sp"></span><button type="button" class="linkx" data-vaxdel="${esc(n)}">Remove</button></div>`).join('')}</div>
+       <div class="staffadd"><input id="sVaxNew" placeholder="Name, exactly as RAVS shows it" autocomplete="off"><button type="button" class="btn" data-vaxadd>Add</button></div>
+       <p class="small muted">Once the RAVS Helper has been on RAVS's "Who is the vaccinator?" page, this becomes RAVS's own list, with emails, and can't be mistyped.</p>`;
+  $('#sOpList').innerHTML = `<div class="staffrows">${(S.staff || []).map(n => `<div class="staffrow"><span class="nm">${esc(n)}</span><span class="sp"></span><button type="button" class="linkx" data-opdel="${esc(n)}">Remove</button></div>`).join('')}</div>
+    <div class="staffadd"><input id="sOpNew" placeholder="Add a name" autocomplete="off"><button type="button" class="btn" data-opadd>Add</button></div>`;
 }
 function renderProdTable() {
   $('#prodTable').innerHTML = `<thead><tr><th>Vaccine</th><th>Product (as RAVS names it)</th><th>Batch</th><th>Expiry</th><th>In use</th></tr></thead><tbody>` +
@@ -1416,12 +1485,12 @@ function readProducts() {
 async function saveSettings(ev) {
   ev.preventDefault();
   const lines = id => $(id).value.split('\n').map(s => s.trim()).filter(Boolean);
-  const s = Object.assign({}, S, { products: readProducts(), vaccinators: (S.ravsVaccinators || []).length ? $$('#sVaxRavs [aria-pressed="true"]').map(b => b.dataset.ravsvax) : lines('#sVaccinators'), staff: lines('#sStaff'), locations: lines('#sLocations'),
-    vaccinator: $('#sVaccinator').value, site: $('#sSite').value, consent: $('#sConsent').value,
+  const s = Object.assign({}, S, { products: readProducts(), locations: lines('#sLocations'), stockDays: Math.max(0, Math.round(+$('#sStockDays').value || 0)),
+    site: $('#sSite').value, consent: $('#sConsent').value,
     prices: { 'Private flu': +$('#sPrivFlu').value || 0, 'Private COVID': +$('#sPrivCov').value || 0 },
     fluAge: +$('#sFluAge').value, fluDate: $('#sFluDate').value, covAge: +$('#sCovAge').value, covDate: $('#sCovDate').value, seasonStart: $('#sSeason').value, nasalFrom: $('#sNasalFrom').value, nasalTo: $('#sNasalTo').value });
   if (!s.vaccinators.includes(s.vaccinator)) s.vaccinator = s.vaccinators[0] || '';
-  await API.saveSettings(s); toast('Settings saved'); await refresh(true);
+  await API.saveSettings(s); setDirty = false; toast('Settings saved'); await refresh(true);
 }
 
 /* ---------- next season ---------- */
@@ -1929,7 +1998,13 @@ document.addEventListener('click', async ev => {
   if ('vaxback' in d) { if (vaxView === 'private') form.vaccines = []; vaxView = 'main'; return renderDeskForm(); }
   if (d.toggleTodo) { openTodo.has(d.toggleTodo) ? openTodo.delete(d.toggleTodo) : openTodo.add(d.toggleTodo); return renderTodo(); }
   if (d.checkin) return checkInBooking(d.checkin);
-  if (d.ravsvax) { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); return; }
+  if (d.ravsvax) { const on = (S.vaccinators || []).includes(d.ravsvax); const list = on ? S.vaccinators.filter(x => x !== d.ravsvax) : (S.ravsVaccinators || []).filter(x => x === d.ravsvax || (S.vaccinators || []).includes(x)); return saveStaff({ vaccinators: list, vaccinator: list.includes(S.vaccinator) ? S.vaccinator : list[0] || '' }); }
+  if ('vaxadd' in d) { const n = $('#sVaxNew').value.replace(/\s+/g, ' ').trim(); if (!n) return $('#sVaxNew').focus(); if ((S.vaccinators || []).includes(n)) return toast(`${n} is already on the list.`); return saveStaff({ vaccinators: (S.vaccinators || []).concat([n]), vaccinator: S.vaccinator || n }, `${n} added for every computer.`); }
+  if (d.vaxdel) { const list = (S.vaccinators || []).filter(x => x !== d.vaxdel); return saveStaff({ vaccinators: list, vaccinator: list.includes(S.vaccinator) ? S.vaccinator : list[0] || '' }, `${d.vaxdel} removed.`); }
+  if ('opadd' in d) { if (!addOperator($('#sOpNew').value)) $('#sOpNew').focus(); return; }
+  if (d.opdel) return saveStaff({ staff: (S.staff || []).filter(x => x !== d.opdel) }, `${d.opdel} removed.`);
+  if ('vaxpick' in d) return openVaxPicker();
+  if ('stockdone' in d) return stockDone();
   if (d.copybk) { const r = allRows().find(x => x.visitId === d.copybk); if (r) copyText(bookingText(r), b); return; }
   if (d.give) return giveVisit(d.give);
   if (d.notgiven) return openNotGiven(d.notgiven);
@@ -1979,7 +2054,8 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.dataset.eligReason) { (form.elig[t.dataset.eligReason] ||= {}).reason = t.value; }
-  if (t.id === 'sVaccinator') { myVax = t.value; store.set('psm.vax', myVax); renderVax(); updateGive(); }
+  if ('vaxon' in t.dataset) setVaxOnDuty(t.value);
+  if ((t.id === 'meSel' || t.id === 'sOperator') && t.value === '__add') { t.value = me; return openAddOperator(); }
   if (t.id === 'meSel' || t.id === 'sOperator') { me = t.value; $('#meSel').value = $('#sOperator').value = me; store.set('psm.me', me); store.set('psm.meDay', todayIso()); $('#opBox').classList.toggle('empty', !me); $('#opBox').classList.remove('flash'); }
   if (t.id === 'fLocation') { store.set('psm.loc', t.value); renderExtraSum(); }
 });
@@ -1993,7 +2069,11 @@ document.addEventListener('input', ev => {
   if (t.id === 'recallSearch') { recallView.q = t.value; recallView.show = 200; clearTimeout(recallSearchTimer); recallSearchTimer = setTimeout(renderRecall, 250); }
   if (t.id === 'fPhone' || t.id === 'fNote') renderExtraSum();
 });
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') closeModal();
+  if (ev.key === 'Enter' && (ev.target.id === 'sOpNew' || ev.target.id === 'sVaxNew')) { ev.preventDefault(); $(ev.target.id === 'sOpNew' ? '[data-opadd]' : '[data-vaxadd]').click(); }
+});
+['input', 'change'].forEach(type => $('#setForm').addEventListener(type, () => { setDirty = true; }));
 $('#fNhs').addEventListener('blur', () => { const n = cleanNhs($('#fNhs').value); if (n.length === 10) $('#fNhs').value = fmtNhs(n); });
 $('#fDob').addEventListener('blur', () => { const d = parseDob($('#fDob').value); if (d) $('#fDob').value = ukDate(d); });
 $('#fPostcode').addEventListener('blur', () => { $('#fPostcode').value = fmtPostcode($('#fPostcode').value); });
@@ -2056,13 +2136,14 @@ function checkRavs() {
   }, 2500);
 }
 // RAVS's own vaccinator names replace typed ones; a typed name close to a RAVS name (case, a letter short) takes the RAVS spelling.
-async function onRavsVaccinators(names, at) {
-  if (JSON.stringify(names) === JSON.stringify(S.ravsVaccinators || [])) return;
+async function onRavsVaccinators(names, at, emails) {
+  emails = emails && typeof emails === 'object' ? emails : null;
+  if (JSON.stringify(names) === JSON.stringify(S.ravsVaccinators || []) && (!emails || JSON.stringify(emails) === JSON.stringify(S.ravsVaccinatorEmails || {}))) return;
   const low = t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
   const close = (a, b) => { const ws = low(a).split(' '); return low(a) === low(b) || (ws.length > 1 && ws.every(w => low(b).includes(w.slice(0, Math.max(3, Math.min(w.length, 5)))))); };
   const pick = n => names.find(x => x === n) || names.find(x => close(n, x));
   const vaccinators = [...new Set((S.vaccinators || []).map(pick).filter(Boolean))];
-  const s = Object.assign({}, S, { ravsVaccinators: names, ravsVaccinatorsAt: at || new Date().toISOString(), vaccinators, vaccinator: pick(S.vaccinator) || vaccinators[0] || '' });
+  const s = Object.assign({}, S, { ravsVaccinators: names, ravsVaccinatorsAt: at || new Date().toISOString(), vaccinators, vaccinator: pick(S.vaccinator) || vaccinators[0] || '' }, emails ? { ravsVaccinatorEmails: emails } : {});
   await API.saveSettings(s); await refresh(true);
   toast('Vaccinator names updated from RAVS. Check them in Settings.');
 }
@@ -2092,7 +2173,7 @@ window.addEventListener('message', async ev => {
   if (d.psm === 'ext-lookup-started' && d.id === form.lookupId) { form.lookupStarted = true; if (d.status) { form.findStatus = d.status; renderFind(); } }
   if (d.psm === 'ext-lookup-status' && d.id === form.lookupId && form.step === 'searching') { form.lookupStarted = form.lookupHeard = true; form.findStatus = d.text || ''; renderFind(); }
   if (d.psm === 'ext-lookup' && Array.isArray(d.results)) { d.results.forEach(onLookup); window.postMessage({ psm: 'app-lookup-ack', ids: d.results.map(x => x.id) }, '*'); }
-  if (d.psm === 'ext-vaccinators' && Array.isArray(d.names) && d.names.length) onRavsVaccinators(d.names, d.at);
+  if (d.psm === 'ext-vaccinators' && Array.isArray(d.names) && d.names.length) onRavsVaccinators(d.names, d.at, d.emails);
   if (d.psm === 'ext-export-status') onExportStatus(d);
   if (d.psm === 'ext-export') onExport(d);
   if (d.psm === 'ext-queued') toast(`${d.added} sent to RAVS Helper (${d.total} in its queue)`);
