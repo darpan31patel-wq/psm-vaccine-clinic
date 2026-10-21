@@ -378,9 +378,9 @@ let me = store.get('psm.meDay', '') === todayIso() ? store.get('psm.me', '') : '
 let form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' };
 // Offline mode (RAVS down) stays on for this computer until it is switched off.
 let offline = !!store.get('psm.offline', false);
-// Vaccinator on duty is chosen per computer (two vaccinators can work at once); the shared setting is only the default.
-let myVax = store.get('psm.vax', '');
-const vaxOnDuty = () => (myVax && (S.vaccinators || []).includes(myVax)) ? myVax : (S.vaccinator || '');
+// One vaccinator for the whole clinic, shared by every computer (operators are chosen per computer).
+store.set('psm.vax', '');
+const vaxOnDuty = () => S.vaccinator || '';
 let todoFilter = 'All';
 let editing = null;
 
@@ -889,11 +889,11 @@ const vaxEmail = n => (S.ravsVaccinatorEmails || {})[n] || '';
 const vaxLabel = n => `<span class="nm">${esc(n)}</span>${vaxEmail(n) ? ` <span class="em">(${esc(vaxEmail(n))})</span>` : ''}`;
 function ravsVaxRadios(group) {
   const names = S.vaccinators || [];
-  return `<div class="ravsq"><div class="rq-h">Who is the vaccinator?</div><p class="rq-hint">Who is vaccinating at this computer. This doesn't change the other computers.</p>` +
+  return `<div class="ravsq"><div class="rq-h">Who is the vaccinator?</div><p class="rq-hint">One vaccinator for the clinic. Changing it here changes it on every computer.</p>` +
     (names.length ? names.map((n, i) => `<label class="ravsr"><input type="radio" name="${group}" value="${esc(n)}" data-vaxon ${n === vaxOnDuty() ? 'checked' : ''}><span class="rc"></span><span>${vaxLabel(n)}</span></label>`).join('')
       : `<p class="rq-empty">No vaccinators yet. Add them under Staff in Settings.</p>`) + `</div>`;
 }
-function setVaxOnDuty(n) { myVax = n; store.set('psm.vax', myVax); renderVax(); updateGive(); $('#sVaxPick').innerHTML = ravsVaxRadios('vaxS'); }
+function setVaxOnDuty(n) { if (n && n !== S.vaccinator) saveStaff({ vaccinator: n }, `${n} is now the vaccinator on every computer.`); }
 function openVaxPicker() {
   openModal(`<div data-noguard>${ravsVaxRadios('vaxM')}<button type="button" class="ravsbtn-go" data-close>Continue</button></div>`);
   $('#modalHost .modal').classList.add('narrow');
@@ -937,7 +937,7 @@ function renderVax() {
   const prods = (S.products || []).filter(p => p.active);
   const noBatch = prods.filter(p => !p.batch);
   const st = stockTake();
-  $('#defaultsBar').innerHTML = `<span><b>Today</b></span><button type="button" class="vaxbtn ${vaxOnDuty() ? '' : 'unset'}" data-vaxpick title="Who is the vaccinator at this computer?">Vaccinator <b>${esc(vaxOnDuty() || 'not set')}</b></button><span>Site <b>${esc(S.site)}</b></span><span>Consent <b>${esc(S.consent)}</b></span>` +
+  $('#defaultsBar').innerHTML = `<span><b>Today</b></span><button type="button" class="vaxbtn ${vaxOnDuty() ? '' : 'unset'}" data-vaxpick title="Who is the vaccinator? (every computer)">Vaccinator <b>${esc(vaxOnDuty() || 'not set')}</b></button><span>Site <b>${esc(S.site)}</b></span><span>Consent <b>${esc(S.consent)}</b></span>` +
     `<span title="${esc(prods.map(p => `${shortProduct(p.product)}: ${p.batch || 'no batch'}`).join('\n'))}">${noBatch.length ? `<span class="warnx">${noBatch.length} batch${noBatch.length > 1 ? 'es' : ''} not set</span>` : `Batches <b>${prods.length} set</b>`}</span>` +
     `<button class="btn sm ghost" data-goto="settings" type="button">Change</button>` +
     (st.due ? `<span class="stockdue">Stock take due <small>${st.last ? `last done ${esc(shortDay(st.last.date))}${st.last.by ? ', ' + esc(st.last.by) : ''}` : 'not done yet'}</small><button type="button" class="btn sm" data-stockdone>Done</button></span>` : '');

@@ -687,10 +687,11 @@ ol.steps { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
 <section class="tab" id="tab-settings">
   <div class="setgrid">
     <section class="panel thispc">
-      <div class="hrow"><h2>This computer</h2><span class="sp"></span><span class="pill p-neutral">Only this computer</span></div>
-      <p class="small muted">Each computer chooses its own, so two desks can work at once. Saved straight away.</p>
-      <div class="f" style="margin:14px 0 18px"><label for="sOperator">Operator</label><select id="sOperator"></select></div>
+      <div class="hrow"><h2>On duty</h2></div>
+      <h3>Vaccinator <span class="pill p-shared">Every computer</span></h3>
       <div id="sVaxPick"></div>
+      <h3>Operator <span class="pill p-neutral">Only this computer</span></h3>
+      <div class="f"><select id="sOperator" aria-label="Operator on this computer"></select><span class="hint">Who is doing the admin on this computer. Each computer chooses its own.</span></div>
     </section>
     <section class="panel staffbox">
       <div class="hrow"><h2>Staff</h2><span class="sp"></span><span class="pill p-shared">Every computer</span></div>
