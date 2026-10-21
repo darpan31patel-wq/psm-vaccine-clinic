@@ -344,7 +344,7 @@ function renderPrivate() {
     const day = rows.filter(r => r.date === d).sort((a, b) => (b.givenAt || '').localeCompare(a.givenAt || ''));
     return `<div class="dayhead"><h3>${d === t ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${n(day, 'Private flu')} flu · ${n(day, 'Private COVID')} COVID · ${money(take(day))}</span></div>
       <div class="panel list" style="padding-block:6px">${day.map(r => `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div>
-        <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}${r.vaccinator ? `<span>${esc(r.vaccinator)}</span>` : ''}</div></div>
+        <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}${r.vaccinator ? `<span class="f f-vac">${esc(r.vaccinator)}</span>` : ''}</div></div>
         <div class="right">${vaxTag(r)}<span class="mono small">${esc(r.batch || 'no batch')}</span><span class="small muted">${money(priceOf(r.vaccine))}</span></div></div>`).join('')}</div>`;
   }).join('') : '<div class="panel empty">No private vaccinations yet this season.</div>';
 }
@@ -397,7 +397,7 @@ function flashOperator() {
   ev.preventDefault(); ev.stopPropagation(); if (t.blur) t.blur();
   flashOperator();
 }, true));
-// Private vaccinations never go to RAVS: saved as done straight away and kept off To record.
+// Private vaccinations never go to RAVS: saved as done straight away and kept off To enter onto RAVS.
 const vaxKind = v => /^Private/.test(v) ? 'priv' : /COVID/.test(v) ? 'covid' : /flu/i.test(v) ? 'flu' : '';
 const vaxTag = (d, withProduct) => `<span class="vtag ${vaxKind(d.vaccine)}">${esc(VACCINES[d.vaccine]?.short || d.vaccine)}${withProduct && d.product && !isPriv(d) ? ` <span class="pr">${esc(shortProduct(d.product))}</span>` : ''}</span>`;
 function statusPill(st, extra = '') { return `<span class="pill p-${st}">${STATUS_LABEL[st] || st}${extra}</span>`; }
@@ -468,7 +468,7 @@ function renderBookings() {
   const same = (a, x) => (a.nhs && x.nhs && a.nhs === x.nhs) || (a.dob === x.dob && norm(a.surname) === norm(x.surname));
   $('#bookedList').innerHTML = vs.length ? vs.map(v => {
     const r = v[0], arrived = v.some(x => x.status === 'checkedin') || reg.some(x => same(r, x));
-    return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div><div class="sub vx">${v.map(x => vaxTag(x)).join('')}</div></div>
+    return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div><div class="sub vx">${v.map(x => vaxTag(x)).join('')}</div></div>
       <div class="right">${arrived ? '<span class="pill p-entered">Registered</span>' : '<span class="pill p-booked">Booked</span>'}${arrived ? '' : `<button type="button" class="btn sm ghost" data-copybk="${esc(r.visitId)}">Copy</button><button type="button" class="btn sm primary" data-checkin="${esc(r.visitId)}">Find patient</button>`}</div></div>`;
   }).join('') : `<div class="empty">No bookings for ${esc(longDate(date))}. Use Paste bookings to bring them in.</div>`;
 }
@@ -779,7 +779,7 @@ function visitCard(v, next, inGiven) {
   const btns = isEdit
     ? `<button type="button" class="btn primary" data-save-edit="${esc(r.visitId)}">Save changes</button><button type="button" class="btn ghost" data-cancel-edit>Cancel</button>`
     : `<button type="button" class="btn go" data-give="${esc(r.visitId)}">Vaccinated</button><button type="button" class="btn" data-edit="${esc(r.visitId)}">Edit</button><button type="button" class="btn ghost" data-notgiven="${esc(r.visitId)}">Not given</button>`;
-  const meta = [`Age ${age}`, `<span class="mono">${esc(ukDate(r.dob))}</span>`, r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : '', `${esc(r.source)} ${esc(r.time)}`, r.location !== 'Pharmacy' ? esc(r.location) : ''].filter(Boolean);
+  const meta = [`Age ${age}`, `<span class="mono f f-dob">${esc(ukDate(r.dob))}</span>`, r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : '', `${esc(r.source)} ${esc(r.time)}`, r.location !== 'Pharmacy' ? esc(r.location) : ''].filter(Boolean);
   const body = `<div class="head"><span class="nm">${esc(fullName(r))}</span><span class="meta">${meta.map(m => `<span>${m}</span>`).join('')}</span></div>
     ${r.note ? `<div class="alert info small">${esc(r.note)}</div>` : ''}<div class="doses">${doses}</div><div class="actions">${btns}</div>`;
   return inGiven ? `<div style="display:grid;gap:14px">${body}</div>` : `<div class="card ${next ? 'next' : ''}">${body}</div>`;
@@ -788,13 +788,13 @@ function visitCard(v, next, inGiven) {
 function waitRow(v) {
   const r = v[0];
   return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub vx">${v.map(d => vaxTag(d, true)).join('')}</div>
-    <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.note ? `<span>${esc(r.note)}</span>` : ''}</div></div>
+    <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.note ? `<span class="f f-note">${esc(r.note)}</span>` : ''}</div></div>
     <div class="right"><button type="button" class="btn sm go" data-give="${esc(r.visitId)}">Vaccinated</button><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button><button type="button" class="btn sm ghost" data-notgiven="${esc(r.visitId)}">Not given</button></div></div>`;
 }
 function givenRow(v) {
   const r = v[0];
   return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub vx">${v.map(d => vaxTag(d, true)).join('')}</div>
-    <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div></div>
+    <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div></div>
     <div class="right"><span class="pills">${[...new Set(v.filter(d => !isPriv(d)).map(d => d.status))].map(st => st === 'given' ? '' : statusPill(st)).join('')}</span><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button>${v.some(d => d.status === 'given' || (isPriv(d) && d.status === 'entered')) ? `<button type="button" class="btn sm ghost" data-undo="${esc(r.visitId)}" title="Back to waiting">Undo</button>` : ''}</div></div>`;
 }
 function doseEditor(d) {
@@ -836,7 +836,7 @@ function renderTodo() {
     const todo = visits(list.filter(r => r.date === d));
     const done = visits(allRows().filter(r => r.status === 'entered' && r.date === d && !isPriv(r))).sort((a, b) => (b[0].enteredAt || '').localeCompare(a[0].enteredAt || ''));
     const age = daysBetween(d, todayIso());
-    return `<div class="dayhead"><h3>${d === todayIso() ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${todo.length} to record · ${done.length} recorded</span>${age > 0 && todo.length ? `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} ago · ${15 - age > 0 ? 15 - age + ' left to claim' : 'claim window passed'}</span>` : ''}</div>` +
+    return `<div class="dayhead"><h3>${d === todayIso() ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${todo.length} to enter onto RAVS · ${done.length} entered</span>${age > 0 && todo.length ? `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} ago · ${15 - age > 0 ? 15 - age + ' left to claim' : 'claim window passed'}</span>` : ''}</div>` +
       (todo.length ? todo.map(todoCard).join('') : '<div class="panel empty">Everything given on this day has been recorded.</div>') +
       (done.length ? `<div class="panel list donelist">${done.map(doneRow).join('')}</div>` : '');
   }).join('');
@@ -846,7 +846,7 @@ function renderTodo() {
 }
 function doneRow(v) {
   const r = v[0];
-  return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div></div>
+  return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div></div>
     <div class="right">${v.map(vaxTag).join('')}<span class="small muted">Recorded ${esc((r.enteredAt || '').slice(11))}</span></div></div>`;
 }
 function todoCard(v) {
@@ -869,7 +869,7 @@ function todoCard(v) {
     return `<div><h4>${esc(d.vaccine)} · ${esc(target)}</h4>${rows.join('')}${d.eligNote ? `<div class="note" style="margin-top:8px">Note: ${esc(d.eligNote)}</div>` : ''}</div>`;
   };
   const patient = `<div><h4>Patient</h4>${kv('NHS number', copyVal(r.nhs, fmtNhs(r.nhs), true))}${kv('First name', copyVal(r.given))}${kv('Last name', copyVal(r.surname))}${kv('Date of birth', copyVal(ukDate(r.dob), '', true))}${kv('Postcode', copyVal(r.postcode, '', true))}</div>`;
-  return `<div class="rv"><div class="rvh"><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="meta"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}<span>Given ${esc(age === 0 ? 'today ' + (r.givenAt || '').slice(11) : ukDate(r.date))}</span>${r.location !== 'Pharmacy' ? `<span>${esc(r.location)}</span>` : ''}${tag}</div></div>
+  return `<div class="rv"><div class="rvh"><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="meta"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}<span>Given ${esc(age === 0 ? 'today ' + (r.givenAt || '').slice(11) : ukDate(r.date))}</span>${r.location !== 'Pharmacy' ? `<span>${esc(r.location)}</span>` : ''}${tag}</div></div>
     <button class="toggle" type="button" data-toggle-todo="${esc(r.visitId)}" aria-expanded="${open}">${open ? 'Hide fields' : 'Show RAVS fields'}</button></div>
     <div style="padding:0 20px 16px;display:grid;gap:10px">${v.map(doseRow).join('')}</div>
     ${open ? `<div class="rvbody"><div class="cols">${patient}${v.map(doseFields).join('')}</div></div>` : ''}</div>`;
@@ -888,7 +888,7 @@ function renderRecords() {
   const patients = new Set(ROWS.filter(r => r.date === t && !['booked', 'checkedin'].includes(r.status)).map(r => r.visitId)).size;
   const tile = ([k, n, c]) => `<div class="tile ${c}"><div class="k">${k}</div><div class="n">${n}</div></div>`;
   $('#tiles').innerHTML = `<h3 class="tilehead">Today</h3>` + [
-    ['Patients registered', patients, ''], ['NHS flu', d.flu, 'flu'], ['NHS COVID', d.covid, 'covid'], ['Entered on RAVS', d.onRavs, 'ok'], ['Still to record', outstanding, outstanding ? 'warn' : 'ok'],
+    ['Patients registered', patients, ''], ['NHS flu', d.flu, 'flu'], ['NHS COVID', d.covid, 'covid'], ['Entered on RAVS', d.onRavs, 'ok'], ['Still to enter onto RAVS', outstanding, outstanding ? 'warn' : 'ok'],
     ['Private', d.pf + d.pc, 'priv'], ['Private taken', money(d.takings), 'priv'],
   ].map(tile).join('') + `<h3 class="tilehead">This season</h3>` + [
     ['NHS vaccinations', all.nhs || 0, ''], ['NHS flu', all.flu || 0, 'flu'], ['NHS COVID', all.covid || 0, 'covid'], ['From earlier days, not on RAVS', late, late ? 'bad' : 'ok'],
@@ -904,7 +904,7 @@ function onSearch() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(async () => {
     const q = $('#searchBox').value; const hits = await API.search(q, S.seasonStart);
-    $('#searchList').innerHTML = q.trim().length < 2 ? '<div class="empty">Type at least two characters.</div>' : hits.length ? hits.map(r => `<div class="row"><div class="time">${esc(ukDate(r.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span><span class="mono">${esc(fmtNhs(r.nhs))}</span><span>${esc(shortProduct(r.product))}</span><span class="mono">${esc(r.batch)}</span><span>${esc(r.vaccinator)}</span></div></div><div class="right"><span class="pill p-neutral">${esc(r.vaccine)}</span>${statusPill(r.status)}</div></div>`).join('') : '<div class="empty">No matches this season.</div>';
+    $('#searchList').innerHTML = q.trim().length < 2 ? '<div class="empty">Type at least two characters.</div>' : hits.length ? hits.map(r => `<div class="row"><div class="time">${esc(ukDate(r.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span><span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span><span class="f">${esc(shortProduct(r.product))}</span><span class="mono f f-batch">${esc(r.batch)}</span><span class="f f-vac">${esc(r.vaccinator)}</span></div></div><div class="right"><span class="pill p-neutral">${esc(r.vaccine)}</span>${statusPill(r.status)}</div></div>`).join('') : '<div class="empty">No matches this season.</div>';
   }, 300);
 }
 /* ---------- Excel export ---------- */

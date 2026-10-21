@@ -53,7 +53,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
 button, input, select, textarea { font: inherit; color: inherit; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1440px; margin: 0 auto; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1760px; margin: 0 auto; }
 
 /* top bar */
 header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); border-top: 4px solid transparent; border-image: linear-gradient(90deg, var(--accent), var(--flu), var(--covid), var(--priv)) 1; border-image-slice: 1 0 0 0; box-shadow: 0 2px 10px rgba(20, 35, 42, .05); }
@@ -68,6 +68,7 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; b
 nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; align-items: stretch; }
 nav.tabs button { border: 0; background: transparent; padding: 0 10px; cursor: pointer; color: var(--muted); font-weight: 700; display: inline-flex; gap: 7px; align-items: center; min-height: 56px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
 nav.tabs button:hover { color: var(--ink); }
+@media (max-width: 1560px) { .brand .bt { display: none; } .topin { gap: 0 14px; } nav.tabs button { padding: 0 8px; } }
 nav.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: linear-gradient(to top, var(--accent-soft), transparent 70%); }
 nav.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 6px; }
 .count { font-family: var(--font-mono); font-size: 12px; background: var(--line-2); border-radius: 99px; padding: 1px 7px; color: var(--muted); font-weight: 500; }
@@ -103,7 +104,7 @@ main { padding-block: 20px 80px; }
 section.tab { display: none; }
 section.tab.on { display: block; }
 .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
-.grid2.desk { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.grid2.desk { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; }
 #box2 .group { margin-top: 14px; }
 #box2 details.extra { margin-top: 12px; }
 #box2 .actions { margin-top: 16px; }
@@ -221,11 +222,32 @@ details.extra .fields { margin-top: 14px; }
 .row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line-2); }
 .list > .row:first-child { border-top: 0; }
 .row .time { font-family: var(--font-mono); font-size: 14px; color: var(--ink); font-weight: 500; }
-.row .sub.vx { margin: 3px 0 2px; gap: 4px 6px; }
+
 .row .who { min-width: 0; }
 .row .nm { font-weight: 700; overflow-wrap: anywhere; }
 .row .sub { font-size: 13px; color: var(--muted); display: flex; gap: 4px 12px; flex-wrap: wrap; }
 .row .right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+/* each patient detail is its own labelled field: small label on top, value under it, thin divider between fields */
+.row .f { display: inline-flex; flex-direction: column; gap: 0; white-space: nowrap; line-height: 1.3; }
+.row .f::before { font-family: var(--font-body); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+.row .f-dob::before { content: "DOB"; }
+.row .f-nhs::before { content: "NHS no."; }
+.row .f-pc::before { content: "Postcode"; }
+.row .f-batch::before { content: "Batch"; }
+.row .f-vac::before { content: "Vaccinator"; }
+.row .f-note::before { content: "Note"; }
+.row .f-dob { color: var(--ink); }
+.row .f-nhs { color: var(--accent); font-weight: 500; }
+.row .f-note { white-space: normal; color: var(--ink); }
+.row .time { display: inline-grid; place-items: center; justify-self: start; padding: 3px 7px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent); font-weight: 700; font-size: 13.5px; }
+/* one line per patient whenever it fits; otherwise it wraps neatly onto a second line */
+.row { grid-template-columns: 64px minmax(0, 1fr) auto; padding: 10px 0; }
+.row .who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; min-width: 0; }
+.row .nm { white-space: nowrap; padding-right: 16px; font-size: 16.5px; min-width: 9.5em; }
+.row .who > .sub { margin: 0; gap: 6px 0; align-items: center; flex-wrap: wrap; }
+.row .who > .sub.vx { gap: 6px; padding-right: 11px; }
+.row .who > .sub:not(.vx) + .sub.vx { padding-left: 14px; border-left: 1px solid var(--line); align-self: stretch; }
+.row .who > .sub:not(.vx) > * { padding: 0 11px; border-left: 1px solid var(--line); }
 @media (max-width: 520px) { .row { grid-template-columns: 44px minmax(0, 1fr); } .row .right { grid-column: 2; justify-content: flex-start; } }
 .empty { color: var(--muted); padding: 22px 8px; text-align: center; font-size: 14px; }
 .summary { display: flex; gap: 6px 20px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 6px; }
@@ -392,9 +414,9 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
   <div class="wrap topin">
     <div class="brand"><img class="brandlogo" src="https://raw.githubusercontent.com/darpan31patel-wq/psm-vaccine-clinic/main/app/psm-logo.png" alt="PSM Pharmacy" width="75" height="62"><span class="bt"><b>PSM Vaccine Clinic</b><small id="todayLabel"></small></span></div>
     <nav class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="desk" aria-selected="true">Clinic <span class="count" id="cDesk"></span></button>
+      <button type="button" role="tab" data-tab="desk" aria-selected="true">Register patient <span class="count" id="cDesk"></span></button>
+      <button type="button" role="tab" data-tab="todo" aria-selected="false">To enter onto RAVS <span class="count" id="cTodo"></span></button>
       <button type="button" role="tab" data-tab="bookings" aria-selected="false">Bookings <span class="count" id="cBook"></span></button>
-      <button type="button" role="tab" data-tab="todo" aria-selected="false">To record <span class="count" id="cTodo"></span></button>
       <button type="button" role="tab" data-tab="private" aria-selected="false">Private <span class="count" id="cPriv"></span></button>
       <button type="button" role="tab" data-tab="records" aria-selected="false">Records</button>
       <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings</button>
@@ -417,7 +439,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
     <div class="stack">
       <section class="panel box" id="box1">
         <div class="hrow"><h2><span class="num">1</span>Find patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="chip small offchip" id="offlineBtn" aria-pressed="false" title="Use when RAVS is down: take full details by hand">Offline mode</button><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
-        <div class="alert warn" id="offlineNote" hidden style="margin-top:12px">Offline mode: RAVS is not checked. Take the full details below. They go on To record to enter on RAVS when it is back.</div>
+        <div class="alert warn" id="offlineNote" hidden style="margin-top:12px">Offline mode: RAVS is not checked. Take the full details below. They go on To enter onto RAVS for when RAVS is back.</div>
         <div id="findFields">
           <p class="lede">Enter the NHS number on its own, or the first name, last name and date of birth. The postcode is optional. You can also paste a copied booking into any box.</p>
           <div class="fields" style="margin-top:16px">
@@ -481,14 +503,14 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 <section class="tab" id="tab-bookings">
   <div class="pagehead"><h2>Bookings</h2><span class="sp"></span>
     <input type="date" id="bkDate" aria-label="Bookings for"><button class="btn primary" id="pasteBtn" type="button">Paste bookings</button></div>
-  <p class="tip">Press <b>Find patient</b> on a booking to fill in Find patient on the Clinic tab and search RAVS. <b>Copy</b> copies the booking so you can paste it into Find patient yourself.</p>
+  <p class="tip">Press <b>Find patient</b> on a booking to fill in Find patient on the Register patient tab and search RAVS. <b>Copy</b> copies the booking so you can paste it into Find patient yourself.</p>
   <div class="panel" style="padding-block:8px"><div class="list" id="bookedList"></div></div>
 </section>
 
 <!-- TO RECORD -->
 <section class="tab" id="tab-todo">
   <div class="pagehead">
-    <h2>Still to record</h2>
+    <h2>To enter onto RAVS</h2>
     <span class="sp"></span>
     <div class="vaxpick" id="todoFilter"></div>
     <button class="btn primary" id="fillAll" type="button" hidden>Fill all in RAVS</button>
