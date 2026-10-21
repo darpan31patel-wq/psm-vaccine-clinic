@@ -89,16 +89,21 @@
   function todayIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
   // The names RAVS lists under "Who is the vaccinator?", spelt exactly as RAVS shows them, so the app can only use those.
+  // RAVS shows other staff as "Name (email)"; the email is kept too, so the app can show them the same way.
   async function saveVaccinators() {
-    const names = radios().map(r => {
+    const people = radios().map(r => {
       const l = (r.id && document.querySelector(`label[for="${CSS.escape(r.id)}"]`)) || r.closest('label');
       const t = String(l ? l.textContent : '').replace(/\s+/g, ' ').trim();
       const me = t.match(/^Me \((.+)\)$/i);
-      return me ? me[1].trim() : t.replace(/\s*\([^)]*@[^)]*\)\s*$/, '').trim();
-    }).filter(Boolean);
-    if (!names.length) return;
+      if (me) return { name: me[1].trim() };
+      const m = t.match(/^(.*?)\s*\(([^()]*@[^()]*)\)\s*$/);
+      return m ? { name: m[1].trim(), email: m[2].trim() } : { name: t };
+    }).filter(p => p.name);
+    if (!people.length) return;
+    const names = people.map(p => p.name), emails = {};
+    people.forEach(p => { if (p.email) emails[p.name] = p.email; });
     const { ravsVaccinators } = await get({ ravsVaccinators: null });
-    if (!ravsVaccinators || JSON.stringify(ravsVaccinators.names) !== JSON.stringify(names)) await set({ ravsVaccinators: { names, at: new Date().toISOString() } });
+    if (!ravsVaccinators || JSON.stringify(ravsVaccinators.names) !== JSON.stringify(names) || JSON.stringify(ravsVaccinators.emails || {}) !== JSON.stringify(emails)) await set({ ravsVaccinators: { names, emails, at: new Date().toISOString() } });
   }
 
   /* ---------- which page are we on ---------- */

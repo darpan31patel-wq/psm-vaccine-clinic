@@ -18,7 +18,7 @@ Once the helper is on the Web Store, every computer updates it automatically. No
 
 1. In Chrome, signed in as the pharmacy account, open https://chrome.google.com/webstore/devconsole
 2. Accept the developer agreement, then pay the US$5 registration fee.
-3. Go to **Account** on the left:
+3. Go to **Settings** on the left (it may say **Account**). You must add and verify the contact email before you can publish:
    - **Publisher name:** PSM Pharmacy
    - **Contact email:** the pharmacy Gmail. Press **Verify** and click the link Google emails you.
    - **Trader / non-trader:** if Google asks, Non-trader is the usual choice for an in-house tool that isn't sold.
@@ -40,6 +40,8 @@ Copy and paste these:
   > When staff press "Fill in RAVS" in the clinic app, the helper opens Record a vaccination (RAVS) and fills in each page: the patient search, vaccination date, vaccinator, vaccine and batch, reason, consent and injection site. It stops on the final "Check and confirm" page. Staff check the details and press Confirm and save themselves. The helper never saves a record on its own.
   >
   > Once RAVS shows "Vaccination saved", the clinic app marks the patient as entered on RAVS. During clinic hours it also keeps the RAVS login active.
+  >
+  > When staff press "Get RAVS export" in the clinic app, the helper makes the pharmacy's own vaccination report on RAVS's Reports pages and passes it to the clinic app, which checks that nothing has been missed. Making the report changes no records.
   >
   > It is only useful to PSM Pharmacy staff who use the PSM Vaccine Clinic app.
 
@@ -102,6 +104,10 @@ Google reviews it, even though it's unlisted. That usually takes a few days, and
 When I change the helper, I'll give you a new zip with a higher version number. Then:
 
 1. Open the item in the dashboard.
-2. Go to **Package**, press **Upload new package**, then **Submit for review**.
+2. Go to **Package** and press **Upload new package**.
+3. If I've changed the description or the privacy answers, paste the new text from this page into **Store listing** or **Privacy**.
+4. Press **Submit for review**.
+
+Only send a new version once the last one has been approved. Sending one while a review is still running cancels it and starts again.
 
 Every computer picks up the new version on its own once Google approves it, usually within a few hours of approval. Nobody has to reinstall anything.
