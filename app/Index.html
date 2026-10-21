@@ -13,8 +13,8 @@
   --faint: #8a999c;
   --line: #e1e7e6;
   --line-2: #eef2f1;
-  --accent: #0a6464;
-  --accent-soft: #e2f0ee;
+  --accent: #2b7570;
+  --accent-soft: #dff0ee;
   --accent-ink: #ffffff;
   --ok: #1d7340; --ok-soft: #e1f1e6;
   --warn: #9a5800; --warn-soft: #fcf0dc;
@@ -25,8 +25,8 @@
   --flu: #1f5fae; --flu-soft: #e3edfa;
   --covid: #6a3fa6; --covid-soft: #efe7fa;
   --priv: #b0336f; --priv-soft: #fbe6f0;
-  --other: #0a6464; --other-soft: #e2f0ee;
-  --brand-grad: linear-gradient(135deg, #0a6464, #1f5fae);
+  --other: #2b7570; --other-soft: #e2f0ee;
+  --brand-grad: linear-gradient(135deg, #2b7570, #6fb5b1);
   --radius: 14px;
   --shadow: 0 1px 2px rgba(20, 35, 42, .04), 0 2px 8px rgba(20, 35, 42, .04);
 }
@@ -53,13 +53,14 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
 button, input, select, textarea { font: inherit; color: inherit; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1440px; margin: 0 auto; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1760px; margin: 0 auto; }
 
 /* top bar */
 header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); border-top: 4px solid transparent; border-image: linear-gradient(90deg, var(--accent), var(--flu), var(--covid), var(--priv)) 1; border-image-slice: 1 0 0 0; box-shadow: 0 2px 10px rgba(20, 35, 42, .05); }
 .topin { display: flex; align-items: stretch; gap: 0 20px; flex-wrap: wrap; }
 .brand { display: flex; flex-direction: column; justify-content: center; padding-block: 10px; line-height: 1.2; }
 .brand { flex-direction: row; align-items: center; gap: 10px; }
+.brandlogo { height: 62px; width: auto; display: block; flex: none; filter: drop-shadow(0 1px 2px rgba(20, 35, 42, .12)); }
 .brand .logo { width: 30px; height: 30px; border-radius: 9px; background: var(--brand-grad); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; letter-spacing: .02em; flex: none; }
 .brand .bt { display: flex; flex-direction: column; }
 .brand b { font-size: 17px; }
@@ -67,6 +68,7 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; b
 nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; align-items: stretch; }
 nav.tabs button { border: 0; background: transparent; padding: 0 10px; cursor: pointer; color: var(--muted); font-weight: 700; display: inline-flex; gap: 7px; align-items: center; min-height: 56px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
 nav.tabs button:hover { color: var(--ink); }
+@media (max-width: 1560px) { .brand .bt { display: none; } .topin { gap: 0 14px; } nav.tabs button { padding: 0 8px; } }
 nav.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: linear-gradient(to top, var(--accent-soft), transparent 70%); }
 nav.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 6px; }
 .count { font-family: var(--font-mono); font-size: 12px; background: var(--line-2); border-radius: 99px; padding: 1px 7px; color: var(--muted); font-weight: 500; }
@@ -145,6 +147,54 @@ section.tab.on { display: block; }
 .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .eligs { display: grid; gap: 10px; margin-top: 14px; }
 .eligs:empty { display: none; }
+/* Select vaccine: four big tiles; private and other open their own view with Back */
+.vhead { display: flex; align-items: center; gap: 10px; margin-top: 14px; min-height: 34px; flex-wrap: wrap; }
+.vhead .sp { flex: 1; }
+.vtitle { font-size: 17px; }
+.vtitle.priv { color: var(--priv); }
+.agechip { font-family: var(--font-mono); font-weight: 700; font-size: 14px; padding: 4px 12px; border-radius: 99px; background: var(--line-2); color: var(--ink); }
+.agechip.bad { background: var(--bad); color: #fff; }
+.vtiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.vtile { --c: var(--accent); position: relative; display: grid; gap: 4px; align-content: center; text-align: left; min-height: 84px; padding: 14px 16px; border-radius: 14px; cursor: pointer; font: inherit; color: var(--ink);
+  border: 2px solid color-mix(in srgb, var(--c) 35%, var(--line)); background: linear-gradient(150deg, color-mix(in srgb, var(--c) 12%, var(--surface)), var(--surface)); transition: transform .08s, box-shadow .12s; }
+.vtile:hover:not(:disabled) { box-shadow: 0 4px 14px color-mix(in srgb, var(--c) 25%, transparent); transform: translateY(-1px); }
+.vtile:focus-visible { outline: 3px solid var(--c); outline-offset: 2px; }
+.vtile.flu { --c: var(--flu); } .vtile.covid { --c: var(--covid); } .vtile.priv { --c: var(--priv); } .vtile.other, .vtile:not(.flu):not(.covid):not(.priv) { --c: var(--accent); }
+.vtile .vt-name { font-size: 22px; font-weight: 700; color: var(--c); line-height: 1.1; }
+.vtile .vt-state { font-size: 13.5px; color: var(--muted); font-weight: 700; }
+.vtile.e-ok .vt-state { color: var(--ok); }
+.vtile.e-warn .vt-state { color: var(--warn); }
+.vtile.priv.e-ok .vt-state { color: var(--priv); font-size: 15px; }
+.vtile[aria-pressed="true"] { background: var(--c); border-color: var(--c); box-shadow: 0 6px 18px color-mix(in srgb, var(--c) 35%, transparent); }
+.vtile[aria-pressed="true"] .vt-name, .vtile[aria-pressed="true"] .vt-state { color: #fff; }
+.vtile .vt-tick { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; border-radius: 50%; background: #fff; color: var(--c); display: grid; place-items: center; font-weight: 700; }
+.vtile.e-bad, .vtile:disabled { cursor: not-allowed; border-color: var(--bad); background: repeating-linear-gradient(135deg, var(--bad-soft) 0 10px, color-mix(in srgb, var(--bad-soft) 55%, var(--surface)) 10px 20px); transform: none; box-shadow: none; }
+.vtile.e-bad .vt-name { color: var(--bad); text-decoration: line-through; }
+.vtile.e-bad .vt-state { color: var(--bad); font-size: 14px; letter-spacing: .02em; }
+.notelig { display: flex; gap: 14px; align-items: center; margin-top: 12px; padding: 14px 16px; border-radius: 14px; background: var(--bad); color: #fff; animation: pop .25s ease-out; }
+.notelig .ni { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: var(--bad); display: grid; place-items: center; font-size: 22px; font-weight: 700; }
+.notelig b { display: block; font-size: 18px; letter-spacing: .03em; }
+.notelig span { font-size: 15px; }
+@keyframes pop { from { transform: scale(.97); opacity: .4; } to { transform: none; opacity: 1; } }
+.eligs:not(:empty) { display: grid; gap: 10px; margin-top: 12px; }
+.rcard { --c: var(--warn); display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--warn); background: var(--warn-soft); }
+.rcard.done { --c: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 70%, var(--surface)); }
+.rcard.freec { border: 1px solid var(--line); background: var(--surface-2); }
+.rcard.freec .rc-head { color: var(--muted); }
+.rcard .rc-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 14px; color: var(--warn); }
+.rcard.done .rc-head { color: var(--ok); }
+.rcard .rc-head b { font-size: 16px; color: var(--ink); }
+.rcard select, .rcard input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); width: 100%; font-size: 15px; }
+.rcard select { font-weight: 700; }
+#regBtn { display: grid; justify-items: center; gap: 2px; }
+#regBtn .need { font-size: 13px; font-weight: 400; opacity: .95; }
+#regBtn .need:empty { display: none; }
+#box2 .actions { flex-direction: column; align-items: stretch; }
+#box2 details.extra { text-align: center; }
+/* previous entries: full width under the two main boxes, quieter colour */
+.panel.today { --tint: #7a8a99; margin-top: 20px; }
+.panel.today h2 { font-size: 17px; color: var(--muted); display: flex; align-items: baseline; gap: 10px; }
+.hsub { font-size: 13px; font-weight: 400; color: var(--faint); }
 .elig { display: grid; gap: 8px; }
 .eline { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
 .eline .ic { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; transform: translateY(3px); }
@@ -190,6 +240,8 @@ details.extra .fields { margin-top: 14px; }
 .p-waiting { background: var(--warn-soft); color: var(--warn); }
 .p-given { background: var(--accent-soft); color: var(--accent); }
 .p-entered { background: var(--ok-soft); color: var(--ok); }
+.p-notravs { background: var(--warn-soft); color: var(--warn); }
+.p-private { background: var(--priv-soft); color: var(--priv); }
 .p-notgiven, .p-late { background: var(--bad-soft); color: var(--bad); }
 .p-neutral { background: var(--line-2); color: var(--muted); }
 .pills { display: inline-flex; gap: 4px; flex-wrap: wrap; }
@@ -220,11 +272,32 @@ details.extra .fields { margin-top: 14px; }
 .row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line-2); }
 .list > .row:first-child { border-top: 0; }
 .row .time { font-family: var(--font-mono); font-size: 14px; color: var(--ink); font-weight: 500; }
-.row .sub.vx { margin: 3px 0 2px; gap: 4px 6px; }
+
 .row .who { min-width: 0; }
 .row .nm { font-weight: 700; overflow-wrap: anywhere; }
 .row .sub { font-size: 13px; color: var(--muted); display: flex; gap: 4px 12px; flex-wrap: wrap; }
 .row .right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+/* each patient detail is its own labelled field: small label on top, value under it, thin divider between fields */
+.row .f { display: inline-flex; flex-direction: column; gap: 0; white-space: nowrap; line-height: 1.3; }
+.row .f::before { font-family: var(--font-body); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+.row .f-dob::before { content: "DOB"; }
+.row .f-nhs::before { content: "NHS no."; }
+.row .f-pc::before { content: "Postcode"; }
+.row .f-batch::before { content: "Batch"; }
+.row .f-vac::before { content: "Vaccinator"; }
+.row .f-note::before { content: "Note"; }
+.row .f-dob { color: var(--ink); }
+.row .f-nhs { color: var(--accent); font-weight: 500; }
+.row .f-note { white-space: normal; color: var(--ink); }
+.row .time { display: inline-grid; place-items: center; justify-self: start; padding: 3px 7px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent); font-weight: 700; font-size: 13.5px; }
+/* one line per patient whenever it fits; otherwise it wraps neatly onto a second line */
+.row { grid-template-columns: 64px minmax(0, 1fr) auto; padding: 10px 0; }
+.row .who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; min-width: 0; }
+.row .nm { white-space: nowrap; padding-right: 16px; font-size: 16.5px; min-width: 9.5em; }
+.row .who > .sub { margin: 0; gap: 6px 0; align-items: center; flex-wrap: wrap; }
+.row .who > .sub.vx { gap: 6px; padding-right: 11px; }
+.row .who > .sub:not(.vx) + .sub.vx { padding-left: 14px; border-left: 1px solid var(--line); align-self: stretch; }
+.row .who > .sub:not(.vx) > * { padding: 0 11px; border-left: 1px solid var(--line); }
 @media (max-width: 520px) { .row { grid-template-columns: 44px minmax(0, 1fr); } .row .right { grid-column: 2; justify-content: flex-start; } }
 .empty { color: var(--muted); padding: 22px 8px; text-align: center; font-size: 14px; }
 .summary { display: flex; gap: 6px 20px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 6px; }
@@ -232,16 +305,27 @@ details.extra .fields { margin-top: 14px; }
 
 /* find patient / record boxes */
 .box h2 { display: flex; align-items: center; gap: 10px; }
-.panel.box, .panel.today { border-top: 3px solid var(--accent); }
-#box2.panel.box { border-top-color: var(--flu); }
+/* every box gets its own light colour wash (set --tint per box) */
+.panel { --tint: var(--accent); border-top: 3px solid var(--tint); border-color: color-mix(in srgb, var(--tint) 22%, var(--line)); border-top-color: var(--tint); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 24%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 9%, var(--surface)) 40%, color-mix(in srgb, var(--tint) 3%, var(--surface)) 100%); box-shadow: 0 1px 2px rgba(20, 35, 42, .04), 0 6px 18px color-mix(in srgb, var(--tint) 12%, transparent); }
+#box2 { --tint: var(--flu); }
 #box2 .num { background: var(--flu); }
-.panel.today { border-top-color: var(--ok); }
-.panel.box, .panel.today { background: linear-gradient(to bottom, color-mix(in srgb, var(--accent-soft) 45%, var(--surface)), var(--surface) 90px); }
-#box2.panel.box { background: linear-gradient(to bottom, color-mix(in srgb, var(--flu-soft) 55%, var(--surface)), var(--surface) 90px); }
-.panel.today { background: linear-gradient(to bottom, color-mix(in srgb, var(--ok-soft) 55%, var(--surface)), var(--surface) 90px); }
-.panel.box.locked, #box2.locked { border-top-color: var(--line); }
-#box2.locked .num { background: var(--line); color: var(--muted); }
-.panel.box.done { border-top-color: var(--ok); }
+
+#tab-bookings .panel { --tint: var(--info); }
+#tab-todo .panel { --tint: var(--warn); }
+#tab-private .panel { --tint: var(--priv); }
+#tab-records .panel { --tint: var(--covid); }
+#tab-records .panel + .panel { --tint: var(--flu); }
+#tab-settings .panel { --tint: var(--accent); }
+#tab-todo .donelist { --tint: var(--ok); }
+.tab .card, .tab .rv { --tint: var(--warn); border-color: color-mix(in srgb, var(--tint) 22%, var(--line)); border-left: 4px solid var(--tint); background: linear-gradient(155deg, color-mix(in srgb, var(--tint) 14%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 4%, var(--surface)) 50%, var(--surface) 100%); }
+#defaultsBar.defaults { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), color-mix(in srgb, var(--flu) 8%, var(--surface)) 60%, color-mix(in srgb, var(--covid) 10%, var(--surface))); border-color: color-mix(in srgb, var(--accent) 20%, var(--line)); }
+/* livelier page: soft colour washes behind the boxes, tinted top bar and summary strip */
+body { background: radial-gradient(1100px 600px at 0% 0%, color-mix(in srgb, var(--accent) 12%, var(--bg)), transparent 70%), radial-gradient(900px 600px at 100% 10%, color-mix(in srgb, var(--covid) 10%, var(--bg)), transparent 70%), radial-gradient(900px 700px at 60% 100%, color-mix(in srgb, var(--flu) 9%, var(--bg)), transparent 70%), var(--bg); background-attachment: fixed; }
+header.top { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 35%, var(--surface) 65%, color-mix(in srgb, var(--covid) 8%, var(--surface))); }
+.panel.box.locked, #box2.locked { opacity: .85; }
+#box2.locked .num { color: #fff; }
+
+.panel.box.done { --tint: var(--ok); }
 .panel h3.sect { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
 .num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; display: inline-grid; place-items: center; flex: none; }
 .box.locked .num { background: var(--line); color: var(--muted); }
@@ -258,7 +342,7 @@ details.extra .fields { margin-top: 14px; }
 .offline .off-only { display: flex; }
 .offline #findFields .lede { display: none; }
 .offchip[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); color: #fff; }
-.panel.box.offline { border-top-color: var(--warn); }
+.panel.box.offline { --tint: var(--warn); }
 .foundhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .histbox { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .histbox.hist { white-space: pre-line; font-size: 14px; padding: 10px 14px; }
@@ -366,6 +450,21 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 .scrim { position: fixed; inset: 0; background: rgba(10, 20, 22, .45); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; z-index: 20; overflow-y: auto; }
 .modal { background: var(--surface); border-radius: 16px; border: 1px solid var(--line); width: min(720px, 100%); padding: 24px; display: grid; gap: 14px; }
 .modal h2 { margin: 0; font-size: 19px; }
+.statusline { font-weight: 700; font-size: 14px; padding: 8px 12px; border-radius: 10px; }
+.statusline.on { background: var(--ok-soft); color: var(--ok); }
+.statusline.off { background: var(--warn-soft); color: var(--warn); }
+.menuopts { display: grid; gap: 10px; }
+.menuopt { display: grid; gap: 3px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font: inherit; color: var(--ink); }
+.menuopt:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.menuopt b { font-size: 16px; }
+.menuopt span { font-size: 13.5px; color: var(--muted); }
+.menuopt.danger b { color: var(--bad); }
+.menuopt.danger:hover { border-color: var(--bad); background: var(--bad-soft); }
+.linkbtn { border: 0; background: none; padding: 4px 0; color: var(--accent); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; justify-self: start; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.editbanner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: var(--info-soft); color: var(--info); font-size: 14px; }
+.editbanner b { color: var(--ink); }
+.editbanner .sp { flex: 1; }
 .modal p { margin: 0; }
 .modal textarea { width: 100%; min-height: 180px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-family: var(--font-mono); font-size: 12px; }
 #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 10px; font-weight: 700; z-index: 30; max-width: calc(100% - 32px); }
@@ -378,11 +477,11 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
 <div id="demoBanner" class="demo-banner" hidden><div class="wrap">Demo with made-up patients. Changes stay in this browser only.</div></div>
 <header class="top">
   <div class="wrap topin">
-    <div class="brand"><span class="logo" aria-hidden="true">PSM</span><span class="bt"><b>PSM Vaccine Clinic</b><small id="todayLabel"></small></span></div>
+    <div class="brand"><img class="brandlogo" src="https://raw.githubusercontent.com/darpan31patel-wq/psm-vaccine-clinic/main/app/psm-logo.png" alt="PSM Pharmacy" width="75" height="62"><span class="bt"><b>PSM Vaccine Clinic</b><small id="todayLabel"></small></span></div>
     <nav class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="desk" aria-selected="true">Clinic <span class="count" id="cDesk"></span></button>
+      <button type="button" role="tab" data-tab="desk" aria-selected="true">Register patient <span class="count" id="cDesk"></span></button>
+      <button type="button" role="tab" data-tab="todo" aria-selected="false">To enter onto RAVS <span class="count" id="cTodo"></span></button>
       <button type="button" role="tab" data-tab="bookings" aria-selected="false">Bookings <span class="count" id="cBook"></span></button>
-      <button type="button" role="tab" data-tab="todo" aria-selected="false">To record <span class="count" id="cTodo"></span></button>
       <button type="button" role="tab" data-tab="private" aria-selected="false">Private <span class="count" id="cPriv"></span></button>
       <button type="button" role="tab" data-tab="records" aria-selected="false">Records</button>
       <button type="button" role="tab" data-tab="settings" aria-selected="false">Settings</button>
@@ -405,7 +504,7 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
     <div class="stack">
       <section class="panel box" id="box1">
         <div class="hrow"><h2><span class="num">1</span>Find patient</h2><span class="sp"></span><span class="pill p-neutral" id="srcPill">Walk-in</span><button type="button" class="chip small offchip" id="offlineBtn" aria-pressed="false" title="Use when RAVS is down: take full details by hand">Offline mode</button><button type="button" class="btn ghost sm" id="clearForm">Clear</button></div>
-        <div class="alert warn" id="offlineNote" hidden style="margin-top:12px">Offline mode: RAVS is not checked. Take the full details below. They go on To record to enter on RAVS when it is back.</div>
+        <div class="alert warn" id="offlineNote" hidden style="margin-top:12px">Offline mode: RAVS is not checked. Take the full details below. They go on To enter onto RAVS for when RAVS is back.</div>
         <div id="findFields">
           <p class="lede">Enter the NHS number on its own, or the first name, last name and date of birth. The postcode is optional. You can also paste a copied booking into any box.</p>
           <div class="fields" style="margin-top:16px">
@@ -431,15 +530,14 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
         <div class="hrow"><h2><span class="num">2</span>Select vaccine</h2></div>
         <p class="lede" id="box2Locked">Find and confirm the patient first.</p>
         <div id="box2Body" hidden>
-          <div class="group">
-            <div class="glabel">Vaccines</div>
-            <div class="vaxpick" id="vaxMain"></div>
-            <div class="vaxpick" id="vaxMore" style="margin-top:8px"></div>
-            <div class="glabel" style="margin-top:14px">Private <span>not recorded on RAVS</span></div>
-            <div class="vaxpick" id="vaxPriv"></div>
-            <div class="eligs" id="eligBox"></div>
-          </div>
+          <div id="editBanner"></div>
+          <div id="vaxArea"></div>
+          <div class="eligs" id="eligBox"></div>
 
+
+          <div id="dupBox"></div>
+          <p class="small" id="giveHint" hidden></p>
+          <div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given"><span class="bl">Vaccinated</span><small class="need" id="regNeed"></small></button></div>
           <details class="extra" id="extraBox">
             <summary>Phone, note or location <span class="muted" id="extraSum"></span></summary>
             <div class="fields">
@@ -448,35 +546,30 @@ td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-nume
               <div class="f"><label for="fNote">Note for the vaccinator</label><input id="fNote"></div>
             </div>
           </details>
-
-          <div id="dupBox"></div>
-          <p class="small" id="giveHint" style="margin:10px 0 0;color:var(--bad)"></p><div class="actions"><button class="btn go lg block" type="submit" id="regBtn" data-mode="given">Vaccinated</button><button class="btn ghost sm" type="submit" id="waitBtn" data-mode="waiting">Not vaccinated yet, add to waiting list</button></div>
         </div>
       </section>
 
+    </div>
+  </form>
     <div class="panel today">
-      <div class="hrow"><h2>Today</h2><span class="sp"></span><span class="summary" id="deskSummary" style="margin:0"></span></div>
-      <div id="waitWrap"><h3 class="sect">Waiting <span id="waitCount" style="font-weight:400"></span></h3>
-      <div class="list waitlist" id="waitList"></div></div>
+      <div class="hrow"><h2>Previous entries <span class="hsub">today, for checking</span></h2><span class="sp"></span><span class="summary" id="deskSummary" style="margin:0"></span></div>
       <h3 class="sect">Vaccinated today <span id="givenCount" style="font-weight:400"></span></h3>
       <div class="list givenbox" id="givenList"></div>
     </div>
-    </div>
-  </form>
 </section>
 
 <!-- BOOKINGS -->
 <section class="tab" id="tab-bookings">
   <div class="pagehead"><h2>Bookings</h2><span class="sp"></span>
     <input type="date" id="bkDate" aria-label="Bookings for"><button class="btn primary" id="pasteBtn" type="button">Paste bookings</button></div>
-  <p class="tip">Press <b>Find patient</b> on a booking to fill in Find patient on the Clinic tab and search RAVS. <b>Copy</b> copies the booking so you can paste it into Find patient yourself.</p>
+  <p class="tip">Press <b>Find patient</b> on a booking to fill in Find patient on the Register patient tab and search RAVS. <b>Copy</b> copies the booking so you can paste it into Find patient yourself.</p>
   <div class="panel" style="padding-block:8px"><div class="list" id="bookedList"></div></div>
 </section>
 
 <!-- TO RECORD -->
 <section class="tab" id="tab-todo">
   <div class="pagehead">
-    <h2>Still to record</h2>
+    <h2>To enter onto RAVS</h2>
     <span class="sp"></span>
     <div class="vaxpick" id="todoFilter"></div>
     <button class="btn primary" id="fillAll" type="button" hidden>Fill all in RAVS</button>

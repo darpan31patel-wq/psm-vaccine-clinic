@@ -19,7 +19,7 @@ const FLU_UNDER_REASONS = RAVS_REASONS.slice(1);
 const COVID_UNDER_REASONS = ['In a clinical risk group', 'Resident in a care home'];
 const SITES = ['Left upper arm', 'Right upper arm', 'Somewhere else'];
 const CONSENTS = ['Patient', "Clinician acting in the patient's best interests", 'Person with lasting power of attorney for health and welfare', 'Parent or guardian', 'Independent mental capacity advocate', 'Court appointed deputy'];
-const STATUS_LABEL = { booked: 'Booked', waiting: 'Waiting', given: 'Given', entered: 'On record', notgiven: 'Not given', checkedin: 'Checked in' };
+const STATUS_LABEL = { deleted: 'Deleted', booked: 'Booked', waiting: 'Waiting', given: 'Given', entered: 'On RAVS', notgiven: 'Not given', checkedin: 'Checked in' };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 /* ===================== small helpers ===================== */
@@ -62,7 +62,7 @@ function nhsValid(s) {
 function fmtPostcode(s) { s = String(s || '').toUpperCase().replace(/\s+/g, ''); return s.length > 3 ? s.slice(0, -3) + ' ' + s.slice(-3) : s; }
 function daysBetween(aIso, bIso) { return Math.round((new Date(bIso) - new Date(aIso)) / 86400000); }
 function fullName(r) { return `${(r.surname || '').toUpperCase()}${r.given ? ', ' + r.given : ''}`; }
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600); }
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, Math.max(2600, String(msg).length * 60)); }
 async function copyText(text, btn) {
   let ok = false;
   try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
@@ -94,7 +94,7 @@ function checkEligibility(vaccine, dobIso, S) {
     return { state: 'age', text: `Private, ${money(priceOf(vaccine, S))} · age ${ageNow}` };
   }
   if (vaccine === 'Nasal flu') {
-    if (S.nasalFrom && S.nasalTo && (dobIso < S.nasalFrom || dobIso > S.nasalTo)) return { state: 'warn', text: `Born outside ${ukDate(S.nasalFrom)} to ${ukDate(S.nasalTo)}. Check they are eligible.` };
+    if (S.nasalFrom && S.nasalTo && (dobIso < S.nasalFrom || dobIso > S.nasalTo)) return { state: 'blocked', short: 'born outside the age range', text: `Born outside ${ukDate(S.nasalFrom)} to ${ukDate(S.nasalTo)}, so not eligible by age.` };
     return { state: 'age', text: 'Date of birth is in the 2 to 3 year old range' };
   }
   return { state: 'free', text: '' };
@@ -174,6 +174,7 @@ function gas(fn, ...args) {
 const Demo = (() => {
   const KEY = 'psmClinicDemo.v3';
   let db = store.get(KEY, null);
+  if (db) db.rows.forEach(r => { if (r.status === 'waiting') { r.status = 'given'; r.givenAt = r.givenAt || `${r.date} ${r.time}`; } });
   function save() { db.version++; store.set(KEY, db); }
   function nhsWithCheck(base9) { for (;;) { let sum = 0; for (let i = 0; i < 9; i++) sum += +base9[i] * (10 - i); let c = 11 - (sum % 11); if (c === 11) c = 0; if (c !== 10) return base9 + c; base9 = String(+base9 + 1); } }
   function seed() {
@@ -192,8 +193,8 @@ const Demo = (() => {
       ['Testcase', 'Carol', '1950-11-02', 'KT5 3CC', ['Flu', 'COVID-19'], 'given', old],
       ['Dummy', 'David', '1944-03-09', 'KT6 4DD', ['Flu', 'COVID-19'], 'given', t],
       ['Placeholder', 'Erin', '1986-05-21', 'KT6 5EE', ['Flu'], 'given', t],
-      ['Mockford', 'Frank', '1952-09-17', 'KT5 6FF', ['Flu'], 'waiting', t],
-      ['Fakeley', 'Grace', '1979-12-03', 'KT6 7GG', ['Flu', 'COVID-19'], 'waiting', t],
+      ['Mockford', 'Frank', '1952-09-17', 'KT5 6FF', ['Flu'], 'given', t],
+      ['Fakeley', 'Grace', '1979-12-03', 'KT6 7GG', ['Flu', 'COVID-19'], 'given', t],
       ['Notreal', 'Harry', '1940-06-25', 'KT6 8HH', ['Flu', 'COVID-19'], 'booked', t],
       ['Pretend', 'Isla', '1962-01-11', 'KT5 9JJ', ['Flu'], 'booked', t],
       ['Madeup', 'Jack', '1947-04-22', 'KT6 1KK', ['Flu', 'COVID-19'], 'entered', t],
@@ -268,7 +269,7 @@ function boardFrom(rows, settings, version, today) {
 function searchRows(rows, q, seasonStart) {
   q = String(q || '').trim().toLowerCase(); if (q.length < 2) return [];
   const qn = cleanNhs(q), qd = parseDob(q);
-  return rows.filter(r => r.status !== 'checkedin' && r.date >= (seasonStart || '') && (
+  return rows.filter(r => r.status !== 'checkedin' && r.status !== 'deleted' && r.date >= (seasonStart || '') && (
     (qn.length >= 6 && r.nhs.includes(qn)) || (qd && r.dob === qd) ||
     (`${r.surname} ${r.given}`.toLowerCase().includes(q)) || (`${r.given} ${r.surname}`.toLowerCase().includes(q))
   )).slice(-80).reverse();
@@ -302,7 +303,7 @@ async function refresh(force) {
     setSync(true);
     if (b.unchanged) return;
     const sj = JSON.stringify(b.settings || {}), settingsChanged = sj !== refresh._sj; refresh._sj = sj;
-    VERSION = b.version; S = Object.assign({}, DEFAULT_SETTINGS, b.settings || {}); ROWS = b.rows || []; DAYS = b.days || [];
+    VERSION = b.version; S = Object.assign({}, DEFAULT_SETTINGS, b.settings || {}); ROWS = (b.rows || []).filter(r => r.status !== 'deleted'); DAYS = b.days || [];
     // Settings saved before private vaccines existed have no private stock rows yet.
     DEFAULT_SETTINGS.products.filter(p => VACCINES[p.vaccine]?.private && !S.products.some(x => x.vaccine === p.vaccine)).forEach(p => S.products = S.products.concat([Object.assign({}, p)]));
     await loadMore();
@@ -317,7 +318,7 @@ async function loadMore() {
   const dates = [t, bk, ...ROWS.filter(r => r.status === 'given').map(r => r.date)].sort();
   const from = dates[0], to = dates[dates.length - 1];
   if (from === t && to === t) { MORE = []; return; }
-  try { MORE = (await API.exportRows(from, to)).filter(r => r.date !== t); } catch (e) { console.warn(e); MORE = []; }
+  try { MORE = (await API.exportRows(from, to)).filter(r => r.date !== t && r.status !== 'deleted'); } catch (e) { console.warn(e); MORE = []; }
 }
 function allRows() { const have = new Set(ROWS.map(r => r.id)); return ROWS.concat(MORE.filter(r => !have.has(r.id))); }
 // Private vaccinations for the whole season, fetched when the Private tab is opened or the data changes.
@@ -344,7 +345,7 @@ function renderPrivate() {
     const day = rows.filter(r => r.date === d).sort((a, b) => (b.givenAt || '').localeCompare(a.givenAt || ''));
     return `<div class="dayhead"><h3>${d === t ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${n(day, 'Private flu')} flu · ${n(day, 'Private COVID')} COVID · ${money(take(day))}</span></div>
       <div class="panel list" style="padding-block:6px">${day.map(r => `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div>
-        <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}${r.vaccinator ? `<span>${esc(r.vaccinator)}</span>` : ''}</div></div>
+        <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}${r.vaccinator ? `<span class="f f-vac">${esc(r.vaccinator)}</span>` : ''}</div></div>
         <div class="right">${vaxTag(r)}<span class="mono small">${esc(r.batch || 'no batch')}</span><span class="small muted">${money(priceOf(r.vaccine))}</span></div></div>`).join('')}</div>`;
   }).join('') : '<div class="panel empty">No private vaccinations yet this season.</div>';
 }
@@ -397,23 +398,55 @@ function flashOperator() {
   ev.preventDefault(); ev.stopPropagation(); if (t.blur) t.blur();
   flashOperator();
 }, true));
-// Private vaccinations never go to RAVS: saved as done straight away and kept off To record.
+// Private vaccinations never go to RAVS: saved as done straight away and kept off To enter onto RAVS.
 const vaxKind = v => /^Private/.test(v) ? 'priv' : /COVID/.test(v) ? 'covid' : /flu/i.test(v) ? 'flu' : '';
 const vaxTag = (d, withProduct) => `<span class="vtag ${vaxKind(d.vaccine)}">${esc(VACCINES[d.vaccine]?.short || d.vaccine)}${withProduct && d.product && !isPriv(d) ? ` <span class="pr">${esc(shortProduct(d.product))}</span>` : ''}</span>`;
 function statusPill(st, extra = '') { return `<span class="pill p-${st}">${STATUS_LABEL[st] || st}${extra}</span>`; }
 function vaxPills(vs) { return vs.map(r => `<span class="pill p-${r.status}" title="${esc(STATUS_LABEL[r.status])}">${esc(VACCINES[r.vaccine]?.short || r.vaccine)}</span>`).join(' '); }
 
 /* ---------- front desk ---------- */
-let showMoreVax = false;
+// Select vaccine shows four big choices: Flu, COVID, Private and Other. Private opens its own view (with Back) and replaces any NHS choice.
+let vaxView = 'main';
+const OTHER_VAX = () => Object.keys(VACCINES).filter(v => !VACCINES[v].main && !VACCINES[v].private);
+const PRIV_VAX = () => Object.keys(VACCINES).filter(v => VACCINES[v].private);
+// What a tile says about the patient's age for that vaccine.
+function tileElig(v, dob) {
+  if (!dob) return { cls: '', text: 'Enter date of birth' };
+  const e = checkEligibility(v, dob, S);
+  if (e.state === 'blocked') return { cls: 'bad', text: `NOT ELIGIBLE: ${e.short || 'under 18'}`, e };
+  if (e.state === 'age') return { cls: 'ok', text: VACCINES[v].private ? money(priceOf(v)) : 'Eligible by age', e };
+  if (e.state === 'reason') return { cls: 'warn', text: v === 'Flu' ? `Under ${S.fluAge}: needs a reason` : `Under ${S.covAge}: only some reasons`, e };
+  if (e.state === 'warn') return { cls: 'warn', text: 'Check age range', e };
+  return { cls: '', text: '', e };
+}
 function setCount(id, n) { const c = $(id); c.textContent = n || ''; c.dataset.n = n || 0; return c; }
 function renderDeskForm() {
-  const main = Object.keys(VACCINES).filter(v => VACCINES[v].main), priv = Object.keys(VACCINES).filter(v => VACCINES[v].private), more = Object.keys(VACCINES).filter(v => !VACCINES[v].main && !VACCINES[v].private);
-  $('#vaxPriv').innerHTML = priv.map(v => `<button type="button" class="chip priv" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)} <span class="pr">${money(priceOf(v))}</span></button>`).join('');
-  const openMore = showMoreVax || more.some(v => form.vaccines.includes(v));
-  $('#vaxMain').innerHTML = main.map(v => `<button type="button" class="chip ${vaxKind(v)}" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)}</button>`).join('') +
-    (openMore ? '' : `<button type="button" class="chip more" data-morevax>More vaccines</button>`);
-  $('#vaxMore').hidden = !openMore;
-  $('#vaxMore').innerHTML = more.map(v => `<button type="button" class="chip small ${vaxKind(v)}" data-vax="${esc(v)}" aria-pressed="${form.vaccines.includes(v)}">${esc(v)}</button>`).join('');
+  const dob = parseDob($('#fDob').value), age = dob ? ageOn(dob, todayIso()) : null;
+  if (form.vaccines.some(isPriv)) vaxView = 'private';
+  const tile = (v, label, extraCls = '') => {
+    const t = tileElig(v, dob), on = form.vaccines.includes(v);
+    return `<button type="button" class="vtile ${vaxKind(v)} ${extraCls} ${t.cls ? 'e-' + t.cls : ''}" data-vax="${esc(v)}" aria-pressed="${on}">
+      <span class="vt-name">${esc(label || v)}</span><span class="vt-state">${t.cls === 'ok' && !VACCINES[v].private ? '✓ ' : ''}${esc(t.text)}</span>${on ? '<span class="vt-tick" aria-hidden="true">✓</span>' : ''}</button>`;
+  };
+  const blocked = dob ? (vaxView === 'private' ? PRIV_VAX() : ['Flu', 'COVID-19']).filter(v => checkEligibility(v, dob, S).state === 'blocked') : [];
+  const stop = blocked.length ? `<div class="notelig" role="alert"><span class="ni">✕</span><div><b>NOT ELIGIBLE BY AGE</b><span>Age ${age}. ${vaxView === 'private' ? 'Private vaccination is 18 and over.' : 'Flu and COVID at the pharmacy are 18 and over.'} Do not vaccinate unless you write the reason in its eligibility box.</span></div></div>` : '';
+  const ageChip = age != null ? `<span class="agechip ${age < 18 ? 'bad' : ''}">Age ${age}</span>` : '';
+  let html;
+  if (vaxView === 'private') {
+    html = `<div class="vhead"><button type="button" class="btn sm" data-vaxback>← Back</button><b class="vtitle priv">Private vaccination</b><span class="small muted">not recorded on RAVS</span><span class="sp"></span>${ageChip}</div>${stop}
+      <div class="vtiles two">${PRIV_VAX().map(v => tile(v, v, 'priv')).join('')}</div>`;
+  } else if (vaxView === 'other') {
+    html = `<div class="vhead"><button type="button" class="btn sm" data-vaxback>← Back</button><b class="vtitle">Other vaccines</b><span class="sp"></span>${ageChip}</div>
+      <div class="vtiles">${OTHER_VAX().map(v => tile(v)).join('')}</div>`;
+  } else {
+    const others = form.vaccines.filter(v => OTHER_VAX().includes(v));
+    html = `<div class="vhead"><span class="small muted">Choose one or more</span><span class="sp"></span>${ageChip}</div>${stop}
+      <div class="vtiles">${tile('Flu')}${tile('COVID-19', 'COVID')}
+        <button type="button" class="vtile priv" data-vaxview="private"><span class="vt-name">Private</span><span class="vt-state">${PRIV_VAX().map(v => `${esc(VACCINES[v].nhs === 'Flu' ? 'Flu' : 'COVID')} ${money(priceOf(v))}`).join(' · ')}</span></button>
+        <button type="button" class="vtile other" data-vaxview="other" aria-pressed="${others.length > 0}"><span class="vt-name">Other</span><span class="vt-state">${others.length ? esc(others.join(', ')) : esc(OTHER_VAX().map(v => VACCINES[v].short).join(', '))}</span>${others.length ? '<span class="vt-tick" aria-hidden="true">✓</span>' : ''}</button></div>`;
+  }
+  $('#vaxArea').innerHTML = html;
+  $('#editBanner').innerHTML = form.editVisit ? `<div class="editbanner"><span>Changing <b>${esc(form.editName)}</b>'s entry from ${esc(ukDate(form.editDate))}</span><span class="sp"></span><button type="button" class="btn sm ghost" data-editcancel>Cancel</button></div>` : '';
   const locs = S.locations || ['Pharmacy'], loc = $('#fLocation').value || store.get('psm.loc', locs[0]);
   $('#fLocation').innerHTML = locs.map(l => `<option ${l === loc ? 'selected' : ''}>${esc(l)}</option>`).join('');
   $('#srcPill').textContent = form.source; $('#srcPill').className = 'pill ' + (form.source === 'Booked' ? 'p-booked' : 'p-neutral');
@@ -426,24 +459,22 @@ function renderExtraSum() {
   if ($('#fNote').value.trim()) bits.push('note added');
   $('#extraSum').textContent = bits.length ? '· ' + bits.join(', ') : '';
 }
+// Only what still needs doing shows under the tiles: a reason to pick, or an age range to check.
 function renderElig() {
   const dob = parseDob($('#fDob').value);
   const box = $('#eligBox');
-  if (!form.vaccines.length) { box.innerHTML = '<div class="eline warn"><span class="ic">!</span><span>Choose at least one vaccine.</span></div>'; return; }
-  if (!dob) { box.innerHTML = ''; return; }
-  const line = (cls, ic, v, text) => `<div class="eline ${cls}"><span class="ic">${ic}</span><span><b>${esc(v)}</b> · ${esc(text)}</span></div>`;
+  if (!dob || !form.vaccines.length) { box.innerHTML = ''; return; }
   box.innerHTML = form.vaccines.map(v => {
-    const e = checkEligibility(v, dob, S); const cur = form.elig[v] || {};
-    let body = '';
-    if (e.state === 'age') body = line('ok', '✓', v, e.text);
-    else if (e.state === 'blocked') body = line('bad', '×', v, e.text);
-    else if (e.state === 'unknown') body = line('muted', '·', v, e.text);
-    else if (e.state === 'warn') body = line('warn', '!', v, e.text);
-    else if (e.state === 'reason') body = line('warn', '!', v, e.text) + `<div class="pair">
-      <select data-elig-reason="${esc(v)}" aria-label="Reason for ${esc(v)}"><option value="">Reason the patient gives…</option>${e.reasons.map(r => `<option ${cur.reason === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
-      <input data-elig-note="${esc(v)}" placeholder="Detail, e.g. condition" value="${esc(cur.note || '')}" aria-label="Detail for ${esc(v)}"></div>`;
-    else body = line('muted', '·', v, 'No age rule') + `<div class="pair"><input data-elig-note="${esc(v)}" placeholder="Eligibility or reason (optional)" value="${esc(cur.note || '')}" aria-label="Eligibility for ${esc(v)}"></div>`;
-    return `<div class="elig">${body}</div>`;
+    const e = checkEligibility(v, dob, S); const cur = form.elig[v] || {}, kind = vaxKind(v);
+    if (e.state === 'reason') return `<div class="rcard ${kind} ${cur.reason ? 'done' : ''}"><div class="rc-head"><b>${esc(VACCINES[v].short)}</b><span>${esc(e.text)}</span></div>
+      <select data-elig-reason="${esc(v)}" aria-label="Reason for ${esc(v)}"><option value="">Choose the reason the patient gives…</option>${e.reasons.map(r => `<option ${cur.reason === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
+      <input data-elig-note="${esc(v)}" placeholder="Detail, e.g. condition (optional)" value="${esc(cur.note || '')}" aria-label="Detail for ${esc(v)}"></div>`;
+    if (e.state === 'blocked') return `<div class="rcard over ${(cur.note || '').trim() ? 'done' : ''}"><div class="rc-head"><b>${esc(VACCINES[v].short)}</b><span>NOT ELIGIBLE BY AGE. ${esc(e.text)} To give it anyway, write the reason.</span></div>
+      ${VACCINES[v].private ? '' : `<select data-elig-reason="${esc(v)}" aria-label="RAVS reason for ${esc(v)}"><option value="">Choose the RAVS reason…</option>${RAVS_REASONS.slice(1).map(r => `<option ${cur.reason === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>`}
+      <input data-elig-note="${esc(v)}" placeholder="Eligibility: why are you giving it? (required)" value="${esc(cur.note || '')}" aria-label="Why ${esc(v)} is being given"></div>`;
+    if (e.state === 'warn') return `<div class="rcard warnc"><div class="rc-head"><b>${esc(VACCINES[v].short)}</b><span>${esc(e.text)}</span></div></div>`;
+    if (e.state === 'free') return `<div class="rcard freec"><div class="rc-head"><b>${esc(v)}</b><span>No age rule</span></div><input data-elig-note="${esc(v)}" placeholder="Eligibility or reason (optional)" value="${esc(cur.note || '')}" aria-label="Eligibility for ${esc(v)}"></div>`;
+    return '';
   }).join('');
 }
 function renderDeskLists() {
@@ -452,9 +483,8 @@ function renderDeskLists() {
   const vs = visits(today);
   const booked = vs.filter(v => v.every(r => r.status === 'booked')).sort((a, b) => a[0].time.localeCompare(b[0].time));
   const reg = vs.filter(v => !v.every(r => r.status === 'booked')).sort((a, b) => b[0].time.localeCompare(a[0].time));
-  const waiting = vs.filter(v => v.some(r => r.status === 'waiting')).length;
   const done = vs.filter(v => v.some(r => r.status === 'given' || r.status === 'entered')).length;
-  $('#deskSummary').innerHTML = `<span><b>${done}</b> vaccinated</span>${waiting ? `<span><b>${waiting}</b> waiting</span>` : ''}`;
+  $('#deskSummary').innerHTML = `<span><b>${done}</b> vaccinated</span>`;
   setCount('#cDesk', reg.length); setCount('#cBook', booked.length);
   renderBookings();
 }
@@ -468,7 +498,7 @@ function renderBookings() {
   const same = (a, x) => (a.nhs && x.nhs && a.nhs === x.nhs) || (a.dob === x.dob && norm(a.surname) === norm(x.surname));
   $('#bookedList').innerHTML = vs.length ? vs.map(v => {
     const r = v[0], arrived = v.some(x => x.status === 'checkedin') || reg.some(x => same(r, x));
-    return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div><div class="sub vx">${v.map(x => vaxTag(x)).join('')}</div></div>
+    return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div><div class="sub vx">${v.map(x => vaxTag(x)).join('')}</div></div>
       <div class="right">${arrived ? '<span class="pill p-entered">Registered</span>' : '<span class="pill p-booked">Booked</span>'}${arrived ? '' : `<button type="button" class="btn sm ghost" data-copybk="${esc(r.visitId)}">Copy</button><button type="button" class="btn sm primary" data-checkin="${esc(r.visitId)}">Find patient</button>`}</div></div>`;
   }).join('') : `<div class="empty">No bookings for ${esc(longDate(date))}. Use Paste bookings to bring them in.</div>`;
 }
@@ -654,7 +684,9 @@ function validateForm(f) {
   if (!form.vaccines.length) errs.push('Choose at least one vaccine.');
   form.vaccines.forEach(v => {
     const e = checkEligibility(v, f.dob, S);
-    if (e.state === 'blocked') errs.push(`${v}: ${e.text}`);
+    const el = form.elig[v] || {};
+    if (e.state === 'blocked' && !(el.note || '').trim()) errs.push(`${v}: not eligible by age. Write the reason in its eligibility box to give it anyway.`);
+    if (e.state === 'blocked' && !isPriv(v) && !el.reason) errs.push(`${v}: choose the RAVS reason.`);
     if (e.state === 'reason' && !(form.elig[v] || {}).reason) errs.push(`${v}: choose the reason the patient gives.`);
   });
   return errs;
@@ -669,11 +701,21 @@ function giveProblems() {
 }
 function updateGive() {
   // Before the patient is confirmed the buttons are hidden, and Enter in Find patient still starts the search.
-  const errs = form.step === 'confirmed' ? giveProblems() : [], wait = errs.filter(e => !/vaccinator on duty/.test(e));
-  $('#regBtn').disabled = errs.length > 0; $('#waitBtn').disabled = wait.length > 0;
+  const errs = form.step === 'confirmed' ? giveProblems() : [];
+  $('#regBtn').disabled = errs.length > 0;
   $('#giveHint').textContent = form.step === 'confirmed' && errs.length ? 'Still needed: ' + errs.join(' ') : '';
+  $('#regBtn .bl').textContent = form.editVisit ? 'Save changes' : 'Vaccinated';
+  $('#regNeed').textContent = form.step === 'confirmed' && errs.length ? 'Still needed: ' + errs[0].replace(/\.$/, '') : '';
 }
 ['input', 'change', 'click'].forEach(type => document.addEventListener(type, () => setTimeout(updateGive), true));
+// What goes in the eligibility columns for a vaccine, from the age check and the reason the desk picked or wrote.
+function eligFields(v, dob) {
+  const e = checkEligibility(v, dob, S), el = form.elig[v] || {};
+  return {
+    eligibility: VACCINES[v].private ? 'Private' : e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''),
+    eligNote: e.state === 'blocked' ? `Not eligible by age, given because: ${(el.note || '').trim()}` : (el.note || ''),
+  };
+}
 async function submitDesk(ev) {
   ev.preventDefault();
   if (form.step !== 'confirmed') { if (form.step === 'find' || form.step === 'error') { canSearch() ? startFind() : confirmPatient(false); } return; }
@@ -681,15 +723,15 @@ async function submitDesk(ev) {
   const f = readForm(); const errs = validateForm(f);
   if (mode === 'given' && !S.vaccinator) errs.push('Choose the vaccinator on duty first (Change, at the top).');
   if (errs.length) { $('#dupBox').innerHTML = `<div class="alert bad">${errs.map(esc).join('<br>')}</div>`; return; }
+  if (form.editVisit) return saveEntryEdit(f);
   const visitId = uid(), now = new Date().toISOString(), t = f.vaxDate || todayIso(), time = nowTime(), given = mode === 'given';
   const rows = form.vaccines.map(v => {
-    const e = checkEligibility(v, f.dob, S), el = form.elig[v] || {};
     return { id: uid(), visitId, date: t, time, source: offline ? 'Offline' : form.source, nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone,
       address: f.address, gp: f.gp,
-      vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S, v) : '', eligibility: VACCINES[v].private ? 'Private' : e.state === 'age' ? (VACCINES[v].ravs ? 'Based on age' : '') : (el.reason || ''), eligNote: el.note || '',
+      vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S, v) : '', ...eligFields(v, f.dob),
       consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? (isPriv(v) ? 'entered' : 'given') : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: given && isPriv(v) ? `${t} ${time}` : '', enteredBy: given && isPriv(v) ? PRIV_BY : '', note: f.note, updatedAt: now };
   });
-  $('#regBtn').disabled = $('#waitBtn').disabled = true;
+  $('#regBtn').disabled = true;
   try {
     await API.register({ rows, bookingVisitId: form.bookingVisitId });
     toast(`${f.given || f.surname || 'Patient'} ${given ? 'saved as vaccinated' : 'added to the waiting list'}`);
@@ -699,7 +741,7 @@ async function submitDesk(ev) {
 }
 function clearForm() {
   cancelFind(); findTimers.forEach(clearTimeout); findTimers = [];
-  $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' }; showMoreVax = false;
+  $('#deskForm').reset(); form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' }; vaxView = 'main';
   $('#nhsHint').textContent = ''; $('#dobHint').textContent = ''; $('#dupBox').innerHTML = '';
   renderDeskForm(); renderFind(); $('#fNhs').focus();
 }
@@ -710,9 +752,9 @@ function checkDuplicates() {
     const f = readForm(); const box = $('#dupBox');
     const q = f.nhs.length === 10 ? f.nhs : (f.dob && f.surname ? f.surname : '');
     if (!q) { box.innerHTML = ''; return; }
-    let hits = await API.search(q, S.seasonStart);
+    let hits = (await API.search(q, S.seasonStart)).filter(r => r.status !== 'deleted');
     hits = hits.filter(r => (f.nhs && r.nhs === f.nhs) || (f.dob && r.dob === f.dob && r.surname === f.surname));
-    hits = hits.filter(r => r.visitId !== form.bookingVisitId);
+    hits = hits.filter(r => r.visitId !== form.bookingVisitId && r.visitId !== form.editVisit);
     const booking = hits.find(r => r.status === 'booked' && r.date === todayIso());
     const had = hits.filter(r => ['given', 'entered', 'waiting'].includes(r.status));
     let html = '';
@@ -727,7 +769,7 @@ function checkInBooking(visitId) {
   const r = v[0];
   clearForm();
   $('#fNhs').value = fmtNhs(r.nhs); $('#fDob').value = ukDate(r.dob); $('#fGiven').value = r.given; $('#fSurname').value = r.surname; $('#fPostcode').value = r.postcode || ''; $('#fPhone').value = r.phone || '';
-  form.vaccines = v.map(x => x.vaccine); form.source = 'Booked'; form.bookingVisitId = visitId;
+  form.vaccines = v.map(x => x.vaccine); form.source = 'Booked'; form.bookingVisitId = visitId; vaxView = form.vaccines.some(isPriv) ? 'private' : 'main';
   showTab('desk'); renderDeskForm(); onDobInput(); onNhsInput(); checkDuplicates();
   if (canSearch()) startFind(); else renderFind();
 }
@@ -740,7 +782,7 @@ function onNhsInput() {
 function onDobInput() {
   const d = parseDob($('#fDob').value), h = $('#dobHint');
   if (!$('#fDob').value) { h.textContent = ''; } else if (!d) { h.textContent = 'Use dd/mm/yyyy'; h.className = 'hint bad'; } else { h.textContent = `${longDate(d)}, age ${ageOn(d, todayIso())}`; h.className = 'hint ok'; }
-  renderElig();
+  renderDeskForm();
 }
 
 /* ---------- vaccinator ---------- */
@@ -752,12 +794,9 @@ function renderVax() {
     `<button class="btn sm ghost" data-goto="settings" type="button">Change</button>`;
   const t = todayIso();
   const vs = visits(ROWS.filter(r => r.date === t));
-  const waiting = vs.filter(v => v.some(r => r.status === 'waiting')).sort((a, b) => a[0].time.localeCompare(b[0].time));
-  const given = vs.filter(v => v.some(r => ['given', 'entered', 'notgiven'].includes(r.status)) && !v.some(r => r.status === 'waiting')).sort((a, b) => (b[0].givenAt || '').localeCompare(a[0].givenAt || ''));
-  $('#waitWrap').hidden = !waiting.length;
-  $('#waitCount').textContent = waiting.length ? `· ${waiting.length}, oldest first` : '';
+  // There is no waiting list any more: every registration is saved as vaccinated.
+  const given = vs.filter(v => v.some(r => ['given', 'entered', 'notgiven'].includes(r.status))).sort((a, b) => (b[0].givenAt || '').localeCompare(a[0].givenAt || ''));
   $('#givenCount').textContent = given.length ? '· ' + given.length : '';
-  $('#waitList').innerHTML = waiting.length ? waiting.map(v => editing === v[0].visitId ? visitCard(v, false) : waitRow(v)).join('') : '';
   if (editing && !vs.some(v => v[0].visitId === editing)) { const ev = ROWS.filter(r => r.visitId === editing); if (ev.length) given.unshift(ev); }
   $('#givenList').innerHTML = given.length ? given.map(v => editing === v[0].visitId ? `<div class="row" style="display:block">${visitCard(v, false, true)}</div>` : givenRow(v)).join('') : '<div class="empty">Nobody vaccinated yet today.</div>';
 }
@@ -779,7 +818,7 @@ function visitCard(v, next, inGiven) {
   const btns = isEdit
     ? `<button type="button" class="btn primary" data-save-edit="${esc(r.visitId)}">Save changes</button><button type="button" class="btn ghost" data-cancel-edit>Cancel</button>`
     : `<button type="button" class="btn go" data-give="${esc(r.visitId)}">Vaccinated</button><button type="button" class="btn" data-edit="${esc(r.visitId)}">Edit</button><button type="button" class="btn ghost" data-notgiven="${esc(r.visitId)}">Not given</button>`;
-  const meta = [`Age ${age}`, `<span class="mono">${esc(ukDate(r.dob))}</span>`, r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : '', `${esc(r.source)} ${esc(r.time)}`, r.location !== 'Pharmacy' ? esc(r.location) : ''].filter(Boolean);
+  const meta = [`Age ${age}`, `<span class="mono f f-dob">${esc(ukDate(r.dob))}</span>`, r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : '', `${esc(r.source)} ${esc(r.time)}`, r.location !== 'Pharmacy' ? esc(r.location) : ''].filter(Boolean);
   const body = `<div class="head"><span class="nm">${esc(fullName(r))}</span><span class="meta">${meta.map(m => `<span>${m}</span>`).join('')}</span></div>
     ${r.note ? `<div class="alert info small">${esc(r.note)}</div>` : ''}<div class="doses">${doses}</div><div class="actions">${btns}</div>`;
   return inGiven ? `<div style="display:grid;gap:14px">${body}</div>` : `<div class="card ${next ? 'next' : ''}">${body}</div>`;
@@ -788,14 +827,21 @@ function visitCard(v, next, inGiven) {
 function waitRow(v) {
   const r = v[0];
   return `<div class="row"><div class="time">${esc(r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub vx">${v.map(d => vaxTag(d, true)).join('')}</div>
-    <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.note ? `<span>${esc(r.note)}</span>` : ''}</div></div>
+    <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.note ? `<span class="f f-note">${esc(r.note)}</span>` : ''}</div></div>
     <div class="right"><button type="button" class="btn sm go" data-give="${esc(r.visitId)}">Vaccinated</button><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button><button type="button" class="btn sm ghost" data-notgiven="${esc(r.visitId)}">Not given</button></div></div>`;
+}
+// One short label per entry: is it on RAVS yet? Private entries never go to RAVS.
+function ravsPill(v) {
+  const nhs = v.filter(d => !isPriv(d));
+  if (!nhs.length) return '<span class="pill p-private">Private</span>';
+  if (nhs.some(d => d.status === 'notgiven')) return statusPill('notgiven');
+  return nhs.every(d => d.status === 'entered') ? '<span class="pill p-entered">✓ On RAVS</span>' : '<span class="pill p-notravs">Not on RAVS yet</span>';
 }
 function givenRow(v) {
   const r = v[0];
   return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub vx">${v.map(d => vaxTag(d, true)).join('')}</div>
-    <div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div></div>
-    <div class="right"><span class="pills">${[...new Set(v.filter(d => !isPriv(d)).map(d => d.status))].map(st => st === 'given' ? '' : statusPill(st)).join('')}</span><button type="button" class="btn sm" data-edit="${esc(r.visitId)}">Edit</button>${v.some(d => d.status === 'given' || (isPriv(d) && d.status === 'entered')) ? `<button type="button" class="btn sm ghost" data-undo="${esc(r.visitId)}" title="Back to waiting">Undo</button>` : ''}</div></div>`;
+    <div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div></div>
+    <div class="right"><span class="pills">${ravsPill(v)}</span><button type="button" class="btn sm" data-entrymenu="${esc(r.visitId)}">Edit</button></div></div>`;
 }
 function doseEditor(d) {
   const prods = (S.products || []).filter(p => p.vaccine === d.vaccine);
@@ -809,7 +855,7 @@ function doseEditor(d) {
     <div class="f"><label>Site</label><select data-k="site">${opt(SITES, d.site)}</select></div>
     <div class="f"><label>Consent</label><select data-k="consent">${opt(CONSENTS, d.consent)}</select></div>
     <div class="f"><label>Vaccinator</label><select data-k="vaccinator"><option value=""></option>${opt(S.vaccinators || [], d.vaccinator)}</select></div>
-    <div class="f"><label>Status</label><select data-k="status">${['waiting', 'given', 'entered', 'notgiven'].map(s => `<option value="${s}" ${s === d.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select></div>
+    <div class="f"><label>Status</label><select data-k="status">${[...(d.status === 'waiting' ? ['waiting'] : []), 'given', 'entered', 'notgiven'].map(s => `<option value="${s}" ${s === d.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select></div>
   </div></div>`;
 }
 async function giveVisit(visitId) {
@@ -836,18 +882,18 @@ function renderTodo() {
     const todo = visits(list.filter(r => r.date === d));
     const done = visits(allRows().filter(r => r.status === 'entered' && r.date === d && !isPriv(r))).sort((a, b) => (b[0].enteredAt || '').localeCompare(a[0].enteredAt || ''));
     const age = daysBetween(d, todayIso());
-    return `<div class="dayhead"><h3>${d === todayIso() ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${todo.length} to record · ${done.length} recorded</span>${age > 0 && todo.length ? `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} ago · ${15 - age > 0 ? 15 - age + ' left to claim' : 'claim window passed'}</span>` : ''}</div>` +
+    return `<div class="dayhead"><h3>${d === todayIso() ? 'Today' : esc(longDate(d))}</h3><span class="small muted">${todo.length} to enter onto RAVS · ${done.length} entered</span>${age > 0 && todo.length ? `<span class="pill ${age >= 10 ? 'p-late' : 'p-waiting'}">${age} day${age > 1 ? 's' : ''} ago</span>` : ''}</div>` +
       (todo.length ? todo.map(todoCard).join('') : '<div class="panel empty">Everything given on this day has been recorded.</div>') +
       (done.length ? `<div class="panel list donelist">${done.map(doneRow).join('')}</div>` : '');
   }).join('');
   const ravsPending = pending.filter(r => targetOf(r) === 'RAVS');
-  $('#fillAll').hidden = !EXT.ready || !ravsPending.length; $('#fillAll').textContent = `Fill all in RAVS (${ravsPending.length})`;
+  $('#fillAll').hidden = !ravsPending.length; $('#fillAll').textContent = `Fill all in RAVS (${ravsPending.length})`;
   $('#extNote').hidden = !EXT.ready; $('#extNote').textContent = `RAVS Helper is connected. It fills each RAVS page, you check the summary and press Confirm and save, and it's marked here automatically.`;
 }
 function doneRow(v) {
   const r = v[0];
-  return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono">${esc(r.postcode)}</span>` : ''}</div></div>
-    <div class="right">${v.map(vaxTag).join('')}<span class="small muted">Recorded ${esc((r.enteredAt || '').slice(11))}</span></div></div>`;
+  return `<div class="row"><div class="time">${esc((r.givenAt || '').slice(11) || r.time)}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}${r.postcode ? `<span class="mono f f-pc">${esc(r.postcode)}</span>` : ''}</div></div>
+    <div class="right">${v.map(vaxTag).join('')}<span class="small muted">Entered ${esc((r.enteredAt || '').slice(11))}</span><button type="button" class="btn sm" data-entrymenu="${esc(r.visitId)}">Edit</button></div></div>`;
 }
 function todoCard(v) {
   const r = v[0], open = openTodo.has(r.visitId);
@@ -859,7 +905,7 @@ function todoCard(v) {
   const doseRow = d => {
     const target = VACCINES[d.vaccine]?.target || 'RAVS';
     return `<div class="dose" style="justify-content:space-between;gap:10px 16px"><span style="display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline"><span class="vx">${vaxTag(d)}</span><span class="det"><span><b>${esc(shortProduct(d.product))}</b></span><span class="mono">${esc(d.batch || 'no batch')}</span>${d.eligibility && d.eligibility !== 'Based on age' ? `<span>${esc(d.eligibility)}</span>` : ''}</span></span>
-      <span class="rvact"><button type="button" class="btn sm ghost" data-edit-todo="${esc(d.visitId)}">Edit</button>${EXT.ready && target === 'RAVS' ? `<button type="button" class="btn primary sm" data-fill="${esc(d.id)}">Fill in RAVS</button>` : ''}<button type="button" class="btn go sm" data-entered="${esc(d.id)}">Entered on ${esc(target)}</button></span></div>`;
+      <span class="rvact"><button type="button" class="btn sm ghost" data-entrymenu="${esc(d.visitId)}">Edit</button>${target === 'RAVS' ? `<button type="button" class="btn primary sm" data-fill="${esc(d.id)}">Fill in RAVS</button>` : ''}<button type="button" class="btn go sm" data-entered="${esc(d.id)}">Entered on ${esc(target)}</button></span></div>`;
   };
   const doseFields = d => {
     const target = VACCINES[d.vaccine]?.target || 'RAVS';
@@ -869,7 +915,7 @@ function todoCard(v) {
     return `<div><h4>${esc(d.vaccine)} · ${esc(target)}</h4>${rows.join('')}${d.eligNote ? `<div class="note" style="margin-top:8px">Note: ${esc(d.eligNote)}</div>` : ''}</div>`;
   };
   const patient = `<div><h4>Patient</h4>${kv('NHS number', copyVal(r.nhs, fmtNhs(r.nhs), true))}${kv('First name', copyVal(r.given))}${kv('Last name', copyVal(r.surname))}${kv('Date of birth', copyVal(ukDate(r.dob), '', true))}${kv('Postcode', copyVal(r.postcode, '', true))}</div>`;
-  return `<div class="rv"><div class="rvh"><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="meta"><span class="mono">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono">${esc(fmtNhs(r.nhs))}</span>` : ''}<span>Given ${esc(age === 0 ? 'today ' + (r.givenAt || '').slice(11) : ukDate(r.date))}</span>${r.location !== 'Pharmacy' ? `<span>${esc(r.location)}</span>` : ''}${tag}</div></div>
+  return `<div class="rv"><div class="rvh"><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="meta"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span>${r.nhs ? `<span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span>` : ''}<span>Given ${esc(age === 0 ? 'today ' + (r.givenAt || '').slice(11) : ukDate(r.date))}</span>${r.location !== 'Pharmacy' ? `<span>${esc(r.location)}</span>` : ''}${tag}</div></div>
     <button class="toggle" type="button" data-toggle-todo="${esc(r.visitId)}" aria-expanded="${open}">${open ? 'Hide fields' : 'Show RAVS fields'}</button></div>
     <div style="padding:0 20px 16px;display:grid;gap:10px">${v.map(doseRow).join('')}</div>
     ${open ? `<div class="rvbody"><div class="cols">${patient}${v.map(doseFields).join('')}</div></div>` : ''}</div>`;
@@ -888,7 +934,7 @@ function renderRecords() {
   const patients = new Set(ROWS.filter(r => r.date === t && !['booked', 'checkedin'].includes(r.status)).map(r => r.visitId)).size;
   const tile = ([k, n, c]) => `<div class="tile ${c}"><div class="k">${k}</div><div class="n">${n}</div></div>`;
   $('#tiles').innerHTML = `<h3 class="tilehead">Today</h3>` + [
-    ['Patients registered', patients, ''], ['NHS flu', d.flu, 'flu'], ['NHS COVID', d.covid, 'covid'], ['Entered on RAVS', d.onRavs, 'ok'], ['Still to record', outstanding, outstanding ? 'warn' : 'ok'],
+    ['Patients registered', patients, ''], ['NHS flu', d.flu, 'flu'], ['NHS COVID', d.covid, 'covid'], ['Entered on RAVS', d.onRavs, 'ok'], ['Still to enter onto RAVS', outstanding, outstanding ? 'warn' : 'ok'],
     ['Private', d.pf + d.pc, 'priv'], ['Private taken', money(d.takings), 'priv'],
   ].map(tile).join('') + `<h3 class="tilehead">This season</h3>` + [
     ['NHS vaccinations', all.nhs || 0, ''], ['NHS flu', all.flu || 0, 'flu'], ['NHS COVID', all.covid || 0, 'covid'], ['From earlier days, not on RAVS', late, late ? 'bad' : 'ok'],
@@ -903,8 +949,8 @@ let searchTimer;
 function onSearch() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(async () => {
-    const q = $('#searchBox').value; const hits = await API.search(q, S.seasonStart);
-    $('#searchList').innerHTML = q.trim().length < 2 ? '<div class="empty">Type at least two characters.</div>' : hits.length ? hits.map(r => `<div class="row"><div class="time">${esc(ukDate(r.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono">${esc(ukDate(r.dob))}</span><span class="mono">${esc(fmtNhs(r.nhs))}</span><span>${esc(shortProduct(r.product))}</span><span class="mono">${esc(r.batch)}</span><span>${esc(r.vaccinator)}</span></div></div><div class="right"><span class="pill p-neutral">${esc(r.vaccine)}</span>${statusPill(r.status)}</div></div>`).join('') : '<div class="empty">No matches this season.</div>';
+    const q = $('#searchBox').value; const hits = (await API.search(q, S.seasonStart)).filter(r => r.status !== 'deleted');
+    $('#searchList').innerHTML = q.trim().length < 2 ? '<div class="empty">Type at least two characters.</div>' : hits.length ? hits.map(r => `<div class="row"><div class="time">${esc(ukDate(r.date).slice(0, 5))}</div><div class="who"><div class="nm">${esc(fullName(r))}</div><div class="sub"><span class="mono f f-dob">${esc(ukDate(r.dob))}</span><span class="mono f f-nhs">${esc(fmtNhs(r.nhs))}</span><span class="f">${esc(shortProduct(r.product))}</span><span class="mono f f-batch">${esc(r.batch)}</span><span class="f f-vac">${esc(r.vaccinator)}</span></div></div><div class="right"><span class="pill p-neutral">${esc(r.vaccine)}</span>${statusPill(r.status)}</div></div>`).join('') : '<div class="empty">No matches this season.</div>';
   }, 300);
 }
 /* ---------- Excel export ---------- */
@@ -1007,7 +1053,7 @@ async function exportExcel() {
     const from = $('#exFrom').value || season, to = $('#exTo').value || todayIso();
     $('#exGo').disabled = true; $('#exOut').innerHTML = '<p class="small muted">Making the file…</p>';
     try {
-      const rows = await API.exportRows(from, to);
+      const rows = (await API.exportRows(from, to)).filter(r => r.status !== 'deleted');
       const wb = await buildWorkbook(rows, from, to);
       const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob), name = `PSM vaccinations ${ukDate(from).replace(/\//g, '-')} to ${ukDate(to).replace(/\//g, '-')}.xlsx`;
@@ -1082,6 +1128,67 @@ function openPaste() {
     const res = await API.importBookings(rows); closeModal(); toast(`${res.added} bookings added${list.length - res.added ? `, ${list.length - res.added} were already in` : ''}`); await refresh(true);
   };
 }
+// Edit on any saved entry: change the details, fill RAVS again, mark it entered, or delete it.
+function entryRows(visitId) { return allRows().filter(r => r.visitId === visitId && r.status !== 'deleted' && r.status !== 'booked' && r.status !== 'checkedin'); }
+function openEntryMenu(visitId) {
+  const v = entryRows(visitId); if (!v.length) return;
+  const r = v[0], onRavs = v.some(d => d.status === 'entered' && !isPriv(d)), nhs = v.filter(d => !isPriv(d));
+  const opt = (data, title, sub, cls = '') => `<button type="button" class="menuopt ${cls}" ${data}><b>${esc(title)}</b><span>${esc(sub)}</span></button>`;
+  openModal(`<h2>Edit entry</h2><p class="small muted" style="margin-top:4px">${esc(fullName(r))} · ${esc(ukDate(r.date))} · ${v.map(d => esc(d.vaccine)).join(', ')}</p>
+    <p class="statusline ${onRavs ? 'on' : 'off'}">${onRavs ? `✓ Already entered on RAVS${v.find(d => d.enteredAt) ? ' at ' + esc(v.find(d => d.enteredAt).enteredAt.slice(11)) : ''}` : 'Not entered on RAVS yet'}</p>
+    <div class="menuopts">
+      ${opt(`data-entryedit="${esc(visitId)}"`, '1. Change patient details or vaccines', onRavs ? 'Already on RAVS: this only corrects the app. Change it on RAVS as well (or delete it there and use Fill in RAVS again).' : 'Opens it in Register patient to correct the name, date of birth, NHS number or vaccines.')}
+      ${nhs.length ? opt(`data-entryrefill="${esc(visitId)}"`, '2. Fill in RAVS again', onRavs ? 'Moves it back to To enter onto RAVS and sends it to the RAVS Helper. Only if it is not on RAVS, or RAVS will have it twice.' : 'Sends it to the RAVS Helper to fill in RAVS.') : ''}
+      ${nhs.length ? opt(`data-entrymark="${esc(visitId)}"`, '3. Entered on RAVS', onRavs ? 'Marks it entered on RAVS again, with the time now.' : 'Marks it as entered on RAVS by hand.') : ''}
+      ${opt(`data-entrydelete="${esc(visitId)}"`, '4. Delete entry', 'Removes it from the app. Nothing on RAVS changes.', 'danger')}
+      <button type="button" class="linkbtn" data-entrydoses="${esc(visitId)}">Change batch, site, consent or vaccinator instead</button>
+    </div><div class="actions"><button type="button" class="btn ghost" data-close>Cancel</button></div>`);
+}
+function confirmDelete(visitId) {
+  const v = entryRows(visitId); if (!v.length) return closeModal();
+  const r = v[0];
+  openModal(`<h2>Delete this entry?</h2><p>${esc(fullName(r))}, ${esc(ukDate(r.date))}: ${v.map(d => esc(d.vaccine)).join(', ')}.</p>
+    <p class="small muted">It disappears from every list, count and export in this app. ${v.some(d => d.status === 'entered' && !isPriv(d)) ? 'It stays on RAVS: delete it there separately if it is wrong.' : ''}</p>
+    <div class="actions"><button type="button" class="btn danger" id="delGo">Delete entry</button><button type="button" class="btn ghost" data-close>Cancel</button></div>`);
+  $('#delGo').onclick = async () => {
+    const stamp = `${todayIso()} ${nowTime()}`;
+    await API.updateEach(v.map(d => ({ id: d.id, patch: { status: 'deleted', note: [d.note, `Deleted by ${me || 'unknown'} ${stamp}`].filter(Boolean).join(' · ') } })));
+    closeModal(); toast('Entry deleted'); await refresh(true);
+  };
+}
+// Load a saved entry back into Register patient; Save changes then updates it instead of adding a new one.
+function loadEntryForEdit(visitId) {
+  const v = entryRows(visitId); if (!v.length) return;
+  const r = v[0], from = curTab;
+  clearForm();
+  $('#fNhs').value = fmtNhs(r.nhs); $('#fDob').value = ukDate(r.dob); $('#fGiven').value = r.given || ''; $('#fSurname').value = r.surname || ''; $('#fPostcode').value = r.postcode || '';
+  $('#fPhone').value = r.phone || ''; $('#fNote').value = r.note || ''; if (r.location) $('#fLocation').value = r.location;
+  form.vaccines = v.map(d => d.vaccine); form.source = r.source || 'Walk-in'; form.editVisit = visitId; form.editFrom = from; form.editName = fullName(r); form.editDate = r.date;
+  form.elig = {}; v.forEach(d => { form.elig[d.vaccine] = { reason: ['Based on age', 'Private'].includes(d.eligibility) ? '' : d.eligibility, note: String(d.eligNote || '').replace(/^Not eligible by age, given because: /, '') }; });
+  form.ravs = { address: r.address || '', gp: r.gp || '' };
+  vaxView = form.vaccines.some(isPriv) ? 'private' : 'main';
+  showTab('desk'); confirmPatient(false); renderDeskForm();
+}
+async function saveEntryEdit(f) {
+  const old = entryRows(form.editVisit), base = old[0];
+  if (!base) { toast('That entry no longer exists.'); return clearForm(); }
+  const patient = { nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone, location: f.location, note: f.note };
+  const changes = old.map(d => form.vaccines.includes(d.vaccine)
+    ? { id: d.id, patch: Object.assign({}, patient, eligFields(d.vaccine, f.dob)) }
+    : { id: d.id, patch: { status: 'deleted', note: [d.note, `Removed by ${me || 'unknown'} ${todayIso()} ${nowTime()}`].filter(Boolean).join(' · ') } });
+  const add = form.vaccines.filter(v => !old.some(d => d.vaccine === v)).map(v => Object.assign({}, base, patient, eligFields(v, f.dob), {
+    id: uid(), vaccine: v, product: defaultProduct(v, f.dob, S), batch: batchFor(defaultProduct(v, f.dob, S), S, v), deskBy: me,
+    status: isPriv(v) ? 'entered' : 'given', enteredAt: isPriv(v) ? (base.givenAt || `${base.date} ${base.time}`) : '', enteredBy: isPriv(v) ? PRIV_BY : '', updatedAt: new Date().toISOString() }));
+  const wasOnRavs = old.some(d => d.status === 'entered' && !isPriv(d)), back = form.editFrom;
+  $('#regBtn').disabled = true;
+  try {
+    if (changes.length) await API.updateEach(changes);
+    if (add.length) await API.register({ rows: add });
+    toast(wasOnRavs ? 'Changes saved. It was already on RAVS, so correct it on RAVS too.' : 'Changes saved');
+    clearForm(); if (back && back !== 'desk') showTab(back); await refresh(true);
+  } catch (e) { $('#dupBox').innerHTML = `<div class="alert bad">Could not save. Check the connection and try again. (${esc(e.message || e)})</div>`; }
+  finally { updateGive(); }
+}
 function openNotGiven(visitId) {
   openModal(`<h2>Not given</h2><div class="f"><label for="ngWhy">Reason</label><select id="ngWhy"><option>Patient declined</option><option>Unwell today</option><option>Not eligible</option><option>Had it elsewhere</option><option>Left before vaccination</option><option>Other</option></select></div>
     <div class="f"><label for="ngNote">Detail (optional)</label><input id="ngNote"></div><div class="actions"><button type="button" class="btn primary" id="ngGo">Save</button><button type="button" class="btn ghost" data-close>Cancel</button></div>`);
@@ -1089,8 +1196,10 @@ function openNotGiven(visitId) {
 }
 
 /* ===================== events ===================== */
+let curTab = 'desk';
 function showTab(name) {
   if (!$('#tab-' + name)) name = 'desk';
+  curTab = name;
   $$('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
   $$('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + name));
   store.set('psm.tab', name);
@@ -1117,9 +1226,8 @@ document.addEventListener('click', async ev => {
   if (d.goto) return showTab(d.goto);
   if (d.vax) {
     const v = d.vax;
-    // Private flu replaces NHS flu (and the other way round); the same for COVID.
-    const pair = VACCINES[v].nhs || Object.keys(VACCINES).find(k => VACCINES[k].nhs === v);
-    form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines.filter(x => x !== pair), v];
+    // Private and NHS vaccines are never mixed in one visit.
+    form.vaccines = form.vaccines.includes(v) ? form.vaccines.filter(x => x !== v) : [...form.vaccines.filter(x => isPriv(x) === isPriv(v)), v];
     return renderDeskForm();
   }
   if ('find' in d) return startFind();
@@ -1129,7 +1237,8 @@ document.addEventListener('click', async ev => {
   if ('findskip' in d) return confirmPatient(false);
   if ('findno' in d) { form.step = 'find'; form.found = null; form.findMsg = 'Not the right patient. Check the details with the patient and search again.'; renderFind(); return $('#fNhs').focus(); }
   if ('findchange' in d) { form.step = 'find'; form.found = null; form.ravs = null; form.checked = false; renderFind(); return $('#fNhs').focus(); }
-  if ('morevax' in d) { showMoreVax = true; return renderDeskForm(); }
+  if (d.vaxview) { if (d.vaxview === 'private') form.vaccines = []; vaxView = d.vaxview; return renderDeskForm(); }
+  if ('vaxback' in d) { if (vaxView === 'private') form.vaccines = []; vaxView = 'main'; return renderDeskForm(); }
   if (d.toggleTodo) { openTodo.has(d.toggleTodo) ? openTodo.delete(d.toggleTodo) : openTodo.add(d.toggleTodo); return renderTodo(); }
   if (d.checkin) return checkInBooking(d.checkin);
   if (d.ravsvax) { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); return; }
@@ -1146,6 +1255,17 @@ document.addEventListener('click', async ev => {
   if (d.undo) { await API.update(ROWS.filter(r => r.visitId === d.undo && (r.status === 'given' || (isPriv(r) && r.status === 'entered'))).map(r => r.id), { status: 'waiting', givenAt: '', enteredAt: '', enteredBy: '' }); return refresh(true); }
   if (d.copy !== undefined) return copyText(d.copy, b);
   if (d.entered) { await API.update([d.entered], { status: 'entered', enteredAt: `${todayIso()} ${nowTime()}`, enteredBy: me }); toast('Marked as recorded'); return refresh(true); }
+  if (d.entrymenu) return openEntryMenu(d.entrymenu);
+  if (d.entryedit) { closeModal(); return loadEntryForEdit(d.entryedit); }
+  if (d.entrydelete) return confirmDelete(d.entrydelete);
+  if (d.entrydoses) { closeModal(); editing = d.entrydoses; showTab('desk'); renderVax(); return $(`[data-dose]`)?.scrollIntoView({ block: 'center' }); }
+  if (d.entrymark) { closeModal(); const ids = entryRows(d.entrymark).filter(x => !isPriv(x)).map(x => x.id); await API.update(ids, { status: 'entered', enteredAt: `${todayIso()} ${nowTime()}`, enteredBy: me }); toast('Marked as entered on RAVS'); return refresh(true); }
+  if (d.entryrefill) {
+    closeModal(); const rows = entryRows(d.entryrefill).filter(x => !isPriv(x));
+    if (rows.some(x => x.status === 'entered')) { await API.update(rows.map(x => x.id), { status: 'given', enteredAt: '', enteredBy: '' }); rows.forEach(x => { x.status = 'given'; x.enteredAt = ''; }); await refresh(true); }
+    return sendToRavs(rows);
+  }
+  if ('editcancel' in d) { const back = form.editFrom; clearForm(); if (back && back !== 'desk') showTab(back); return; }
   if (d.fill) return sendToRavs(ROWS.filter(r => r.id === d.fill));
   if (b.id === 'fillAll') return sendToRavs(ROWS.filter(r => r.status === 'given' && (VACCINES[r.vaccine]?.target || 'RAVS') === 'RAVS').sort((a, b) => (a.givenAt || a.date).localeCompare(b.givenAt || b.date) || a.visitId.localeCompare(b.visitId)));
   if (d.todofilter) { todoFilter = d.todofilter; return renderTodo(); }
@@ -1245,6 +1365,7 @@ function ravsJob(r) {
     eligibility: r.eligibility, consent: r.consent, site: r.site, note: r.note || '' };
 }
 function sendToRavs(rows) {
+  if (!EXT.ready) return toast("The RAVS Helper isn't connected here. Use Chrome with the RAVS Helper installed, open RAVS, then press Check RAVS.");
   const bad = rows.filter(r => !r.batch || !r.vaccinator || !r.eligibility);
   if (bad.length) toast(`${bad.length} need a batch, vaccinator or reason first. Use Edit.`);
   const ok = rows.filter(r => !bad.includes(r));
