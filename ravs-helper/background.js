@@ -19,7 +19,21 @@ async function sideBySide(appTab, screen) {
   chrome.tabs.sendMessage(ravs.id, { type: 'start-next' }).catch(e => { if (/Receiving end does not exist/i.test(String(e && e.message))) chrome.tabs.reload(ravs.id); });
 }
 
+// The clinic app's address. The helper links itself to the first copy of the app it sees and from then on only
+// passes patient details to that one, never to another page hosted by Google.
+const APP_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[^/]+\/|macros\/)s\/([\w-]+)\/exec(?:[?#/]|$)/;
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg && msg.type === 'check-app') {
+    const m = APP_URL.exec((sender.tab && sender.tab.url) || '');
+    if (!m) { reply({ ok: false }); return; }
+    chrome.storage.local.get({ appId: '' }, ({ appId }) => {
+      if (!appId) chrome.storage.local.set({ appId: m[1] }, () => reply({ ok: true }));
+      else if (appId === m[1]) reply({ ok: true });
+      else reply({ ok: false, why: 'This RAVS Helper is linked to a different copy of the clinic app. To link it to this one, remove the helper in chrome://extensions and load it again.' });
+    });
+    return true;
+  }
   if (msg && msg.type === 'side-by-side' && sender.tab) {
     // If the windows can't be placed (an unusual screen layout), fall back to showing the RAVS tab.
     sideBySide(sender.tab, msg.screen).then(() => reply({ ok: true }), e => { console.warn(e); showRavs(true); reply({ ok: false, error: String(e && e.message || e) }); });
