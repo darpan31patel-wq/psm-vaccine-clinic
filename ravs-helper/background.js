@@ -53,10 +53,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     });
     return true;
   }
-  if (msg && msg.type === 'open-ravs') { showRavs(msg.focus !== false).then(() => reply({ ok: true })); return true; }
+  if (msg && msg.type === 'open-ravs') { showRavs(msg.focus !== false, msg.export).then(() => reply({ ok: true })); return true; }
 });
 
-function showRavs(focus) {
+function showRavs(focus, isExport) {
   return chrome.tabs.query({ url: RAVS_URLS }).then(tabs => {
     if (tabs.length) {
       const t = tabs[0];
@@ -64,7 +64,7 @@ function showRavs(focus) {
         chrome.tabs.update(t.id, { active: true });
         chrome.windows.update(t.windowId, { focused: true });
       }
-      chrome.tabs.sendMessage(t.id, { type: 'start-next' }).catch(e => {
+      chrome.tabs.sendMessage(t.id, { type: isExport ? 'start-export' : 'start-next' }).catch(e => {
         // The helper isn't running in that tab yet (it was open before the helper was installed or updated): reload it so it starts.
         if (/Receiving end does not exist/i.test(String(e && e.message))) chrome.tabs.reload(t.id);
       });

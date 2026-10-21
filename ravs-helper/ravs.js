@@ -269,6 +269,110 @@
     return { done: true };
   }
 
+
+  /* ---------- RAVS export for the app's RAVS check ---------- */
+  // Walks RAVS's own Reports pages (Create report > timeframe > vaccines > sites > data > Confirm and create report > Download report)
+  // for this pharmacy's records, then hands the file to the app. Vaccinations in the queue always go first.
+  const EXPORT_MS = 4 * 60 * 1000;
+  let exportKey = '', exportGrab = '', readyClicked = '';
+  function exportStatus(job, text, extra) { return set({ exportStatus: Object.assign({ id: job.id, text, at: Date.now() }, extra || {}) }); }
+  async function exportFinish(job, result) {
+    await set({ exportJob: null, exportResult: Object.assign({ id: job.id, at: Date.now() }, result) });
+    message = result.ok ? 'RAVS export sent to the clinic app.' : result.error; messageBad = !result.ok; exportKey = '';
+    render(await state());
+  }
+  function checkboxByLabel(text) { const t = norm(text); return [...document.querySelectorAll('input[type=checkbox]')].find(c => labelText(c) === t); }
+  function tick(el, on) { if (el && el.checked !== on) el.click(); }
+  function buttonText(re) { return [...document.querySelectorAll('main button, main a, main input[type=submit]')].find(b => re.test(norm(b.textContent || b.value))); }
+  const toB64 = buf => { let s = ''; const a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); };
+  // Reads the report file the Download button points at, so it can go straight to the app. It still downloads as normal too.
+  async function grabFile(job, url, name, init, onFail) {
+    if (!url || exportGrab === url) return;
+    exportGrab = url;
+    try {
+      const res = await fetch(url, Object.assign({ credentials: 'include' }, init || {}));
+      if (!res.ok) throw new Error('RAVS answered ' + res.status);
+      const cd = res.headers.get('content-disposition') || '';
+      const fn = (cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)/i) || [])[1] || name || 'ravs-report.csv';
+      const buf = await res.arrayBuffer();
+      if (/text\/html/i.test(res.headers.get('content-type') || '') && !/\.(csv|xlsx)$/i.test(fn)) throw new Error('not a file');
+      await exportFinish(job, { ok: true, name: decodeURIComponent(fn), type: res.headers.get('content-type') || '', data: toB64(buf) });
+    } catch (e) {
+      if (onFail) return onFail();
+      exportGrab = '';
+      await exportFinish(job, { ok: true, downloaded: true, name: name || '' });
+    }
+  }
+  document.addEventListener('click', ev => {
+    const a = ev.target.closest && ev.target.closest('a[href]');
+    if (!a || !/^\/reports/.test(path())) return;
+    get({ exportJob: null }).then(({ exportJob }) => { if (exportJob && (a.hasAttribute('download') || /^blob:/.test(a.href))) grabFile(exportJob, a.href, a.getAttribute('download') || ''); });
+  }, true);
+  const EX = {
+    start() { const b = buttonText(/^create (a )?report$/); if (b) { b.click(); return 'Opening Create report'; } },
+    dates(job) {
+      const custom = radioWhere(l => /custom date range/.test(l));
+      if (!custom) return;
+      choose(custom);
+      const box = document.querySelector(`#${CSS.escape(custom.getAttribute('aria-controls') || '')}`) || document;
+      const parts = [...box.querySelectorAll('input')].filter(i => /^(day|month|year)$/.test(labelText(i)));
+      if (parts.length < 6) return;
+      const f = ukDateParts(job.from), t = ukDateParts(job.to);
+      [f.d, f.m, f.y, t.d, t.m, t.y].forEach((v, i) => setValue(parts[i], v));
+      return { go: true, text: `Choosing ${job.from.split('-').reverse().join('/')} to ${job.to.split('-').reverse().join('/')}` };
+    },
+    vaccines(job) {
+      const want = (job.vaccines || ['COVID-19', 'Flu']).map(norm);
+      const boxes = [...document.querySelectorAll('input[type=checkbox]')];
+      if (!boxes.length) return;
+      boxes.forEach(c => tick(c, want.includes(labelText(c))));
+      if (!boxes.some(c => c.checked)) return;
+      return { go: true, text: 'Choosing ' + (job.vaccines || ['COVID-19', 'Flu']).join(', ') };
+    },
+    sites() { const boxes = [...document.querySelectorAll('input[type=checkbox]')]; if (!boxes.length) return; boxes.forEach(c => tick(c, true)); return { go: true, text: 'Choosing your site' }; },
+    data() { const boxes = [...document.querySelectorAll('input[type=checkbox]')]; if (!boxes.length) return; boxes.forEach(c => tick(c, true)); return { go: true, text: 'Choosing all data' }; },
+    check() { const b = buttonText(/^confirm and create report$/); if (b) { b.click(); return 'Creating the report on RAVS'; } },
+    ready(job) {
+      const b = buttonText(/^download (the )?report$/);
+      if (!b) return 'Waiting for RAVS to make the report';
+      if (b.tagName === 'A' && b.href && !/^javascript:/i.test(b.href)) { grabFile(job, b.href, b.getAttribute('download') || ''); return 'Reading the report'; }
+      if (readyClicked === job.id) return 'Downloading the report';
+      readyClicked = job.id;
+      // A plain button saves the file through RAVS's own page; give it a moment, then say where it went.
+      const press = () => { b.click(); setTimeout(() => get({ exportJob: null }).then(({ exportJob }) => { if (exportJob && exportJob.id === job.id) exportFinish(job, { ok: true, downloaded: true, name: '' }); }), 6000); };
+      const form = b.form;
+      if (!form || !form.action) { press(); return 'Downloading the report'; }
+      // A form button: send the same form ourselves to read the file, and fall back to pressing it.
+      const data = new FormData(form); if (b.name) data.append(b.name, b.value);
+      const post = /post/i.test(form.method);
+      const url = post ? form.action : form.action.split('?')[0] + '?' + new URLSearchParams(data).toString();
+      grabFile(job, url, '', post ? { method: 'POST', body: new URLSearchParams(data) } : null, press);
+      return 'Reading the report';
+    },
+  };
+  async function runExport(job) {
+    if (Date.now() - (job.startedAt || 0) > EXPORT_MS) return exportFinish(job, { ok: false, error: `RAVS export stopped: it was still on "${h1() || 'a page'}" after 4 minutes. Look at the RAVS tab, then try again.` });
+    if (looksLikeLogin()) { await exportStatus(job, 'RAVS needs you to log in. Open the RAVS tab, log in, and the export carries on.'); message = 'Log in to RAVS. The export carries on once you are in.'; messageBad = true; return render(await state()); }
+    // After Download report, RAVS goes back to Reports while the file saves: don't start a second report.
+    if (readyClicked === job.id) return;
+    const p = path();
+    const page = p === '/reports' ? 'start' : (p.match(/^\/reports\/(dates|vaccines|sites|data|check|ready)$/) || [])[1];
+    if (!page) { exportKey = ''; await exportStatus(job, 'Opening Reports on RAVS'); const nav = [...document.querySelectorAll('a')].find(a => norm(a.textContent) === 'reports'); if (nav) nav.click(); else location.href = location.origin + '/reports'; return; }
+    if (hasError()) {
+      const err = ((document.querySelector('.nhsuk-error-summary, .govuk-error-summary') || {}).innerText || '').replace(/^there is a problem\s*/i, '').replace(/\s+/g, ' ').trim();
+      return exportFinish(job, { ok: false, error: 'RAVS would not make the report: ' + (err || 'it showed a problem') + '.' });
+    }
+    const key = `${job.id}|${p}|${h1()}`;
+    if (key === exportKey && page !== 'ready') return;
+    exportKey = key;
+    const res = EX[page](job);
+    if (!res) { exportKey = ''; clearTimeout(runExport._t); runExport._t = setTimeout(run, 1500); return; }
+    const text = typeof res === 'string' ? res : res.text;
+    await exportStatus(job, text); message = 'RAVS export: ' + text; messageBad = false; render(await state());
+    if (page === 'ready') { clearTimeout(runExport._t); runExport._t = setTimeout(run, 2000); }
+    if (res.go) { await sleep(STEP_DELAY); const now = await get({ exportJob: null, current: null }); if (now.exportJob && now.exportJob.id === job.id && !now.current) { const b = continueButton(); if (b) b.click(); } }
+  }
+
   /* ---------- main loop ---------- */
   let lastKey = '', busy = false, message = '', messageBad = false;
 
@@ -299,6 +403,7 @@
         return render(st);
       }
       if (!st.current && st.queue.length && !st.paused) return startNext();
+      if (!st.current && !st.queue.length) { const { exportJob } = await get({ exportJob: null }); if (exportJob) return runExport(exportJob); }
       const job = st.queue.find(j => j.id === st.current);
       if (!job || st.paused) return render(st);
       if (looksLikeLogin()) {
@@ -389,8 +494,8 @@
     on('clear', async () => { await set({ queue: [], current: null, stage: null, captured: {} }); message = 'Queue cleared.'; render(await state()); });
   }
 
-  chrome.runtime.onMessage.addListener((msg, _s, reply) => { if (msg && msg.type === 'ping') reply({ login: looksLikeLogin() }); if (msg && msg.type === 'start-next') { lastKey = ''; state().then(st => (st.current ? run() : startNext())); reply({ ok: true }); } });
-  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.queue) state().then(st => { if (!st.current && st.queue.length && !st.paused) startNext(); else render(st); }); });
+  chrome.runtime.onMessage.addListener((msg, _s, reply) => { if (msg && msg.type === 'ping') reply({ login: looksLikeLogin() }); if (msg && msg.type === 'start-export') { exportKey = ''; run(); reply({ ok: true }); } if (msg && msg.type === 'start-next') { lastKey = ''; state().then(st => (st.current ? run() : startNext())); reply({ ok: true }); } });
+  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.exportJob && ch.exportJob.newValue) { exportKey = ''; run(); } if (area === 'local' && ch.queue) state().then(st => { if (!st.current && st.queue.length && !st.paused) startNext(); else render(st); }); });
 
   /* ---------- keep RAVS logged in ---------- */
   // While the clinic app is open (7am to 8pm), refresh RAVS after 10 quiet minutes so it doesn't time out mid-clinic.
@@ -410,7 +515,7 @@
     const hour = new Date().getHours();
     if (hour < 7 || hour >= 20) return;
     const st = await get({ queue: [], current: null, appSeenAt: 0 });
-    if (st.current || st.queue.length || Date.now() - st.appSeenAt > 3 * 60 * 1000) return;
+    if (st.current || st.queue.length || (await get({ exportJob: null })).exportJob || Date.now() - st.appSeenAt > 3 * 60 * 1000) return;
     lastActive = Date.now();
     await set({ keptAliveAt: Date.now() });
     if (safeToReload()) location.reload();
