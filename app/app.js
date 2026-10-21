@@ -371,6 +371,9 @@ let me = store.get('psm.meDay', '') === todayIso() ? store.get('psm.me', '') : '
 let form = { vaccines: ['Flu'], elig: {}, source: 'Walk-in', bookingVisitId: '', step: 'find' };
 // Offline mode (RAVS down) stays on for this computer until it is switched off.
 let offline = !!store.get('psm.offline', false);
+// Vaccinator on duty is chosen per computer (two vaccinators can work at once); the shared setting is only the default.
+let myVax = store.get('psm.vax', '');
+const vaxOnDuty = () => (myVax && (S.vaccinators || []).includes(myVax)) ? myVax : (S.vaccinator || '');
 let todoFilter = 'All';
 let editing = null;
 
@@ -783,7 +786,7 @@ function validateForm(f) {
 function giveProblems() {
   if (form.step !== 'confirmed') return ['Find and confirm the patient first.'];
   const errs = validateForm(readForm());
-  if (!S.vaccinator) errs.push('Choose the vaccinator on duty (Change, at the top).');
+  if (!vaxOnDuty()) errs.push('Choose the vaccinator on duty (Change, at the top).');
   if (!me) errs.push('Choose the operator (top right).');
   return errs;
 }
@@ -809,7 +812,7 @@ async function submitDesk(ev) {
   if (form.step !== 'confirmed') { if (form.step === 'find' || form.step === 'error') { canSearch() ? startFind() : confirmPatient(false); } return; }
   const mode = ev.submitter?.dataset.mode || 'given';
   const f = readForm(); const errs = validateForm(f);
-  if (mode === 'given' && !S.vaccinator) errs.push('Choose the vaccinator on duty first (Change, at the top).');
+  if (mode === 'given' && !vaxOnDuty()) errs.push('Choose the vaccinator on duty first (Change, at the top).');
   if (errs.length) { $('#dupBox').innerHTML = `<div class="alert bad">${errs.map(esc).join('<br>')}</div>`; return; }
   if (form.editVisit) return saveEntryEdit(f);
   const visitId = uid(), now = new Date().toISOString(), t = f.vaxDate || todayIso(), time = nowTime(), given = mode === 'given';
@@ -817,7 +820,7 @@ async function submitDesk(ev) {
     return { id: uid(), visitId, date: t, time, source: offline ? 'Offline' : form.source, nhs: f.nhs, surname: f.surname, given: f.given, dob: f.dob, postcode: f.postcode, phone: f.phone,
       address: f.address, gp: f.gp,
       vaccine: v, product: defaultProduct(v, f.dob, S), batch: given ? batchFor(defaultProduct(v, f.dob, S), S, v) : '', ...eligFields(v, f.dob),
-      consent: S.consent, site: S.site, vaccinator: given ? S.vaccinator : '', deskBy: me, location: f.location, status: given ? (isPriv(v) ? 'entered' : 'given') : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: given && isPriv(v) ? `${t} ${time}` : '', enteredBy: given && isPriv(v) ? PRIV_BY : '', note: f.note, updatedAt: now };
+      consent: S.consent, site: S.site, vaccinator: given ? vaxOnDuty() : '', deskBy: me, location: f.location, status: given ? (isPriv(v) ? 'entered' : 'given') : 'waiting', givenAt: given ? `${t} ${time}` : '', enteredAt: given && isPriv(v) ? `${t} ${time}` : '', enteredBy: given && isPriv(v) ? PRIV_BY : '', note: f.note, updatedAt: now };
   });
   $('#regBtn').disabled = true;
   try {
@@ -877,7 +880,7 @@ function onDobInput() {
 function renderVax() {
   const prods = (S.products || []).filter(p => p.active);
   const noBatch = prods.filter(p => !p.batch);
-  $('#defaultsBar').innerHTML = `<span><b>Today</b></span><span>Vaccinator <b>${esc(S.vaccinator || 'not set')}</b></span><span>Site <b>${esc(S.site)}</b></span><span>Consent <b>${esc(S.consent)}</b></span>` +
+  $('#defaultsBar').innerHTML = `<span><b>Today</b></span><span>Vaccinator <b>${esc(vaxOnDuty() || 'not set')}</b></span><span>Site <b>${esc(S.site)}</b></span><span>Consent <b>${esc(S.consent)}</b></span>` +
     `<span title="${esc(prods.map(p => `${shortProduct(p.product)}: ${p.batch || 'no batch'}`).join('\n'))}">${noBatch.length ? `<span class="warnx">${noBatch.length} batch${noBatch.length > 1 ? 'es' : ''} not set</span>` : `Batches <b>${prods.length} set</b>`}</span>` +
     `<button class="btn sm ghost" data-goto="settings" type="button">Change</button>`;
   const t = todayIso();
@@ -948,8 +951,8 @@ function doseEditor(d) {
 }
 async function giveVisit(visitId) {
   const now = new Date(); const stamp = `${todayIso()} ${nowTime()}`;
-  const changes = ROWS.filter(r => r.visitId === visitId && r.status === 'waiting').map(r => ({ id: r.id, patch: { status: isPriv(r) ? 'entered' : 'given', givenAt: stamp, ...(isPriv(r) ? { enteredAt: stamp, enteredBy: PRIV_BY } : {}), batch: r.batch || batchFor(r.product, S, r.vaccine), vaccinator: r.vaccinator || S.vaccinator, site: r.site || S.site, consent: r.consent || S.consent } }));
-  if (!S.vaccinator) toast('Set the vaccinator on duty in Settings');
+  const changes = ROWS.filter(r => r.visitId === visitId && r.status === 'waiting').map(r => ({ id: r.id, patch: { status: isPriv(r) ? 'entered' : 'given', givenAt: stamp, ...(isPriv(r) ? { enteredAt: stamp, enteredBy: PRIV_BY } : {}), batch: r.batch || batchFor(r.product, S, r.vaccine), vaccinator: r.vaccinator || vaxOnDuty(), site: r.site || S.site, consent: r.consent || S.consent } }));
+  if (!vaxOnDuty()) toast('Set the vaccinator on duty in Settings');
   await API.updateEach(changes); toast('Marked as vaccinated'); await refresh(true);
 }
 
@@ -1157,7 +1160,7 @@ async function exportExcel() {
 /* ---------- settings ---------- */
 function renderSettings() {
   const opt = (list, cur) => list.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
-  $('#sVaccinator').innerHTML = '<option value=""></option>' + opt(S.vaccinators || [], S.vaccinator);
+  $('#sVaccinator').innerHTML = '<option value=""></option>' + opt(S.vaccinators || [], vaxOnDuty());
   $('#sSite').innerHTML = opt(SITES, S.site); $('#sConsent').innerHTML = opt(CONSENTS, S.consent);
   // Once the helper has read RAVS's "Who is the vaccinator?" page, names can only be picked from RAVS, never typed.
   const fromRavs = (S.ravsVaccinators || []).length > 0;
@@ -1697,6 +1700,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.dataset.eligReason) { (form.elig[t.dataset.eligReason] ||= {}).reason = t.value; }
+  if (t.id === 'sVaccinator') { myVax = t.value; store.set('psm.vax', myVax); renderVax(); updateGive(); }
   if (t.id === 'meSel' || t.id === 'sOperator') { me = t.value; $('#meSel').value = $('#sOperator').value = me; store.set('psm.me', me); store.set('psm.meDay', todayIso()); $('#opBox').classList.toggle('empty', !me); $('#opBox').classList.remove('flash'); }
   if (t.id === 'fLocation') { store.set('psm.loc', t.value); renderExtraSum(); }
 });
