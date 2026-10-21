@@ -1219,7 +1219,11 @@ function rcGuess(rows) {
   const head = rows[hi].map(h => String(h || '').trim());
   const map = {}, used = new Set();
   RC_FIELDS.forEach(([k, , re]) => { const i = head.findIndex((h, j) => !used.has(j) && re.test(h.toLowerCase().replace(/[_\-]+/g, ' '))); if (i >= 0) { map[k] = i; used.add(i); } });
-  return { head, data: rows.slice(hi + 1), map };
+  // RAVS reports can include "not given" and deleted entries: those aren't vaccinations to match.
+  const col = re => head.findIndex(h => re.test(h.toLowerCase().replace(/[\s_\-]+/g, '')));
+  const vi = col(/^vaccinated$/), ai = col(/^audittype$/);
+  const data = rows.slice(hi + 1).filter(r => !(vi >= 0 && /^(no|false|n)$/i.test(String(r[vi] || '').trim())) && !(ai >= 0 && /delet/i.test(String(r[ai] || ''))));
+  return { head, data, map };
 }
 function rcRecords() {
   const { data, map } = RC, get = (r, k) => map[k] == null ? '' : String(r[map[k]] ?? '').trim();
