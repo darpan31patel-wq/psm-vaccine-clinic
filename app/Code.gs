@@ -80,8 +80,8 @@ function saveAppCopy_(html) {
   if (html.indexOf('psm-clinic-app') < 0 || code.indexOf('PSM Vaccine Clinic') < 0) return false;
   const p = PropertiesService.getScriptProperties();
   const sum = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, html + code));
-  if (p.getProperty('copySum') === sum) return true;
   const folder = backupFolder_();
+  if (p.getProperty('copySum') === sum && copyFile_(folder, 'Index.html') && copyFile_(folder, 'app.js')) return true;
   [['Index.html', html, 'text/html'], ['app.js', code, 'text/plain']].forEach(([name, text, type]) => {
     const f = copyFile_(folder, name);
     if (f) f.setContent(text); else folder.createFile('App copy - ' + name, text, type);
@@ -116,31 +116,58 @@ function saveHelperCopy_() {
 /** The app code from the Drive copy, for when GitHub and jsDelivr can't be reached from the computer. */
 function apiAppCode() { return driveCopy_('app.js'); }
 
-/* ---------- Nightly backup ---------- */
+/* ---------- Backups ---------- */
 
-/** Run this once from the editor (choose it in the list at the top, then press Run). It turns on the nightly backup. */
+const BACKUP_PREFIX = 'Vaccine Clinic backup ';
+
+/**
+ * Run this once from the editor (choose it in the list at the top, then press Run). From then on, every hour Google
+ * checks the data sheet and backs it up to Drive if anything changed. Running it again is safe.
+ */
 function turnOnBackups() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'nightlyBackup').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('nightlyBackup').timeBased().everyDays(1).atHour(2).inTimezone(TZ).create();
-  nightlyBackup();
+  ScriptApp.getProjectTriggers().filter(t => ['nightlyBackup', 'backupIfChanged'].indexOf(t.getHandlerFunction()) >= 0).forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('backupIfChanged').timeBased().everyHours(1).create();
+  backupIfChanged(true);
 }
-/** Copies every tab of the data sheet into a new sheet in the backups folder and keeps the newest 30. */
-function nightlyBackup() {
+/** Older setups call this every night. It now only backs up when something changed too. */
+function nightlyBackup() { backupIfChanged(); }
+/**
+ * Backs up the data sheet to the Drive folder "PSM Clinic backups", only when something changed since the last backup:
+ * a save in the app, or an edit made straight in the sheet. Also puts back the app copy and helper zip if they're missing.
+ */
+function backupIfChanged(force) {
+  const p = PropertiesService.getScriptProperties();
   const ss = SpreadsheetApp.getActive();
+  const v = String(version_());
+  const edited = DriveApp.getFileById(ss.getId()).getLastUpdated().getTime();
+  if (force === true || p.getProperty('backupVersion') !== v || edited > Number(p.getProperty('backupEdited') || 0)) backup_(ss, v);
+  try { saveAppCopy_(); } catch (e) { console.warn(e); }
+  try { saveHelperCopy_(); } catch (e) { console.warn(e); }
+}
+/**
+ * Copies every tab into a new sheet named for today. Later changes the same day replace that day's backup (the one it
+ * replaces goes to Drive's bin), so there is one backup per day that had changes. The newest 30 days are kept.
+ */
+function backup_(ss, v) {
   const folder = backupFolder_();
-  const name = 'Vaccine Clinic backup ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH.mm');
-  const copy = SpreadsheetApp.create(name);
+  const day = BACKUP_PREFIX + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  const copy = SpreadsheetApp.create(day);
   const blank = copy.getSheets()[0].setName('__blank__'); // the empty sheet a new spreadsheet starts with
   ss.getSheets().forEach(sh => sh.copyTo(copy).setName(sh.getName()));
   copy.deleteSheet(blank);
   DriveApp.getFileById(copy.getId()).moveTo(folder);
-  const old = [];
+  const older = [];
   const it = folder.getFiles();
-  while (it.hasNext()) { const f = it.next(); if (f.getName().indexOf('Vaccine Clinic backup ') === 0) old.push(f); }
-  old.sort((a, b) => b.getDateCreated() - a.getDateCreated()).slice(KEEP_BACKUPS).forEach(f => f.setTrashed(true));
-  PropertiesService.getScriptProperties().setProperty('backupAt', new Date().toISOString());
-  try { saveAppCopy_(); } catch (e) { console.warn(e); }
-  try { saveHelperCopy_(); } catch (e) { console.warn(e); }
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getId() === copy.getId() || f.getName().indexOf(BACKUP_PREFIX) !== 0) continue;
+    if (f.getName().indexOf(day) === 0) f.setTrashed(true); else older.push(f);
+  }
+  older.sort((a, b) => b.getDateCreated() - a.getDateCreated()).slice(KEEP_BACKUPS - 1).forEach(f => f.setTrashed(true));
+  const p = PropertiesService.getScriptProperties();
+  p.setProperty('backupAt', new Date().toISOString());
+  p.setProperty('backupVersion', v);
+  p.setProperty('backupEdited', String(DriveApp.getFileById(ss.getId()).getLastUpdated().getTime()));
 }
 
 /** Run once from the editor (or it runs on first open) to create the sheets. */
