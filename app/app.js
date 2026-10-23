@@ -2096,10 +2096,10 @@ $('#setForm').addEventListener('submit', saveSettings);
 
 /* ===================== RAVS Helper link ===================== */
 const EXT = { ready: false, version: '', ravs: '', error: '' };
-const BUILD = '21 Oct 2026, 8';
+const BUILD = '23 Oct 2026, 1';
 const whenUk = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${ukDate(isoDate(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 function renderBuild() {
-  const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups")` : ' · Nightly backup not turned on yet';
+  const backup = !hasGas ? '' : BACKUP.at ? ` · Last backup ${whenUk(BACKUP.at)} (Google Drive, folder "PSM Clinic backups", made within the hour whenever anything changes)` : ' · Backups not turned on yet';
   const helperZip = BACKUP.helper ? ` · Helper to install: "PSM RAVS Helper ${BACKUP.helper}.zip" in that folder${EXT.ready && verLt(EXT.version, BACKUP.helper) ? ' (newer than this computer\'s, please update)' : ''}` : '';
   $('#buildInfo').textContent = `App version ${BUILD}${window.PSM_LOADED_FROM ? ` (from the ${window.PSM_LOADED_FROM}: GitHub could not be reached)` : ''} · RAVS Helper ${EXT.ready ? EXT.version + (EXT.error ? ' (not reachable, reload this page)' : '') : EXT.error ? EXT.error : 'not installed on this computer'}${backup}${helperZip}`;
 }
