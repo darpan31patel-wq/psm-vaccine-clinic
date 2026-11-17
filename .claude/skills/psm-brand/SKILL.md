@@ -16,9 +16,9 @@ Family run NHS community pharmacy on the Tolworth Broadway. Tagline: **"In The J
 | teal-50 | `#EEF7F6` | page tint, hover |
 | teal-100 | `#D8EEEC` | soft fills, selected rows |
 | teal-300 | `#8CC8C4` | borders, dividers on teal |
-| teal-500 | `#3E8984` | **logo teal**, primary buttons, links |
-| teal-600 | `#357D78` | button hover |
-| teal-700 | `#2E6F6B` | headings on white, pressed |
+| teal-500 | `#3E8984` | **logo teal**: big headings, bands, blocks. Not behind small white text (only 4.1:1) |
+| teal-600 | `#357D78` | **primary buttons** (white text 4.8:1) |
+| teal-700 | `#2E6F6B` | links and small headings on white (5.8:1), button hover |
 | teal-900 | `#123E3B` | dark bands, text on light teal |
 | ink | `#18302E` | body text |
 | ground | `#F3F7F6` | app background |
@@ -71,11 +71,14 @@ body { font-family:var(--body); color:var(--ink); background:var(--ground); font
 h1,h2,h3 { font-family:var(--display); color:var(--teal-900); line-height:1.15; }
 .card { background:var(--surface); border:2px solid var(--line); border-radius:var(--radius-lg); padding:20px; }
 .btn { min-height:var(--tap); padding:0 22px; border-radius:999px; border:0; font:600 17px var(--body);
-       background:var(--teal-500); color:#fff; }
-.btn:hover { background:var(--teal-600); }
+       background:var(--teal-600); color:#fff; }
+.btn:hover { background:var(--teal-700); }
+a { color:var(--teal-700); }
 ```
 
 ## Components and layout
+
+- Text contrast at least 4.5:1 everywhere (all the status pairs above pass).
 
 - White rounded cards (16 to 20px radius) with a coloured border; bold gradient or teal bands for headers.
 - Buttons and tap targets at least 48px tall; the main action big and obvious.
